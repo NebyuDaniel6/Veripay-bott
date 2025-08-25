@@ -1,0 +1,151 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    container_name: veripay_postgres
+    environment:
+      POSTGRES_DB: veripay
+      POSTGRES_USER: veripay_user
+      POSTGRES_PASSWORD: veripay_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - veripay_network
+    restart: unless-stopped
+
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: veripay_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - veripay_network
+    restart: unless-stopped
+
+  # Waiter Bot
+  waiter_bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: veripay_waiter_bot
+    environment:
+      - DATABASE_URL=postgresql://veripay_user:veripay_password@postgres:5432/veripay
+      - REDIS_URL=redis://redis:6379
+      - WAITER_BOT_TOKEN=${WAITER_BOT_TOKEN}
+      - ADMIN_BOT_TOKEN=${ADMIN_BOT_TOKEN}
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+      - ./reports:/app/reports
+      - ./models:/app/models
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - veripay_network
+    restart: unless-stopped
+    command: python bots/waiter_bot.py
+
+  # Admin Bot
+  admin_bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: veripay_admin_bot
+    environment:
+      - DATABASE_URL=postgresql://veripay_user:veripay_password@postgres:5432/veripay
+      - REDIS_URL=redis://redis:6379
+      - WAITER_BOT_TOKEN=${WAITER_BOT_TOKEN}
+      - ADMIN_BOT_TOKEN=${ADMIN_BOT_TOKEN}
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+      - ./reports:/app/reports
+      - ./models:/app/models
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - veripay_network
+    restart: unless-stopped
+    command: python bots/admin_bot.py
+
+  # Webhook Server (optional)
+  webhook:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: veripay_webhook
+    environment:
+      - DATABASE_URL=postgresql://veripay_user:veripay_password@postgres:5432/veripay
+      - REDIS_URL=redis://redis:6379
+      - WAITER_BOT_TOKEN=${WAITER_BOT_TOKEN}
+      - ADMIN_BOT_TOKEN=${ADMIN_BOT_TOKEN}
+      - WEBHOOK_URL=${WEBHOOK_URL}
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+      - ./reports:/app/reports
+      - ./models:/app/models
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - veripay_network
+    restart: unless-stopped
+    command: python webhook_server.py
+    ports:
+      - "8000:8000"
+
+  # Nginx Reverse Proxy (optional)
+  nginx:
+    image: nginx:alpine
+    container_name: veripay_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+      - ./logs/nginx:/var/log/nginx
+    depends_on:
+      - webhook
+    networks:
+      - veripay_network
+    restart: unless-stopped
+
+  # Monitoring (optional)
+  monitoring:
+    image: prom/prometheus:latest
+    container_name: veripay_monitoring
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - veripay_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+
+networks:
+  veripay_network:
+    driver: bridge 

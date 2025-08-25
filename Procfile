@@ -1,0 +1,1 @@
+web: python3 lean_veripay_bot.py 
