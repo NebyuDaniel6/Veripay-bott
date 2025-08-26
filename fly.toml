@@ -1,0 +1,41 @@
+# fly.toml app configuration file generated for veripay-bot on 2024-08-26T18:55:00Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+
+app = "veripay-bot"
+primary_region = "fra"
+
+[build]
+
+[env]
+  BOT_TOKEN = "8450018011:AAHbrKSnGqDLb-t6WAI74RbjN8A7OZNQSSc"
+  ADMIN_USER_ID = "123456789"
+  DATABASE_URL = "sqlite:///lean_veripay.db"
+  LOG_LEVEL = "INFO"
+  OCR_ENGINE = "tesseract"
+  OCR_CONFIDENCE = "0.7"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[http_service.checks]]
+  grace_period = "10s"
+  interval = "30s"
+  method = "GET"
+  timeout = "5s"
+  path = "/health"
+
+[machine]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 512
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 512 

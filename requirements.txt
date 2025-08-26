@@ -1,4 +1,4 @@
-# Essential Dependencies for VeriPay Bot (Railway Deployment)
+# Essential Dependencies for VeriPay Bot (Cloud Deployment)
 
 # Telegram Bot Framework
 aiogram==3.2.0
@@ -21,6 +21,9 @@ loguru==0.7.2
 # Basic utilities
 requests==2.31.0
 numpy==1.24.3
+
+# Web Framework (for Fly.io)
+flask==3.0.0
 
 # Cloud deployment
 gunicorn==21.2.0 
