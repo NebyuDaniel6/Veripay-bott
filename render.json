@@ -28,5 +28,8 @@
       "key": "OCR_CONFIDENCE",
       "value": "0.7"
     }
-  ]
+  ],
+  "buildFilter": {
+    "paths": ["requirements.txt", "lean_veripay_bot_cloud.py", "*.py"]
+  }
 } 
