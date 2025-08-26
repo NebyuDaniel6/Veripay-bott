@@ -1,1 +1,1 @@
-web: python3 lean_veripay_bot.py 
+web: python3 lean_veripay_bot_cloud.py 
