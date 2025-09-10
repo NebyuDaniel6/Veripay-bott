@@ -19,24 +19,16 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-MANIFEST
 
 # Virtual environments
 venv/
 env/
 ENV/
-env.bak/
-venv.bak/
 
 # Environment variables
 .env
 .env.local
 .env.production
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
 
 # Logs
 logs/
@@ -45,7 +37,6 @@ logs/
 # Uploads
 uploads/
 reports/
-backups/
 
 # IDE
 .vscode/
@@ -57,9 +48,6 @@ backups/
 .DS_Store
 Thumbs.db
 
-# Railway
-.railway/
-
 # Temporary files
 *.tmp
-*.temp 
+*.temp

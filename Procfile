@@ -1,1 +1,1 @@
-web: python3 veripay_supabase_bot.py 
+web: python veripay_bot.py
