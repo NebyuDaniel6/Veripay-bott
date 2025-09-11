@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-VeriPay Bot - PRD COMPLIANT VERSION
+VeriPay Bot - COMPLETE VERSION
 Following VeriPay PRD as single source of truth
 Milestone 1 + Milestone 2 features
 """
@@ -150,7 +150,7 @@ class VeriPayBot:
         self.application.add_handler(MessageHandler(filters.Document, self.handle_document_message))
 
     async def start_command(self, update: Update, context):
-        """Handle /start command - PRD compliant"""
+        """Handle /start command"""
         user_id = update.effective_user.id
         user_name = update.effective_user.first_name or "User"
         
@@ -158,99 +158,51 @@ class VeriPayBot:
         self.log_audit(user_id, "start_command", f"User {user_name} started bot")
         
         if user_id in users:
-            role = users[user_id].get('role', 'waiter')
-            if role == 'super_admin':
-                await update.message.reply_text(f"🔧 Welcome back, Super Admin {user_name}!")
-                await self.show_super_admin_menu(update)
-            elif role == 'restaurant_admin':
-                await update.message.reply_text(f"👨‍💼 Welcome back, Restaurant Admin {user_name}!")
-                await self.show_restaurant_admin_menu(update)
-            else:
-                await update.message.reply_text(f"🍳 Welcome back, Waiter {user_name}!")
-                await self.show_waiter_menu(update)
+            await update.message.reply_text(f" Welcome back, {user_name}!")
         else:
             await update.message.reply_text(f"🎉 Welcome to VeriPay!\n\nHello {user_name}! 👋\n\nVeriPay helps restaurants manage payments and transactions efficiently.\n\nPlease select your role:")
-            
-            # Role selection keyboard - PRD compliant
-            keyboard = [
-                [InlineKeyboardButton("🍳 Waiter Registration", callback_data="register_waiter")],
-                [InlineKeyboardButton("👨‍💼 Restaurant Admin Login", callback_data="restaurant_admin_login")],
-                [InlineKeyboardButton("🔧 Super Admin Login", callback_data="super_admin_login")]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            await update.message.reply_text(
-                "Please select your role:",
-                reply_markup=reply_markup
-            )
-
-    async def show_super_admin_menu(self, update: Update):
-        """Show Super Admin menu - PRD compliant"""
+        
+        # Role selection keyboard
         keyboard = [
-            [InlineKeyboardButton("📊 All Transactions", callback_data="admin_all_transactions")],
-            [InlineKeyboardButton("⏳ Pending Approvals", callback_data="admin_pending_approvals")],
-            [InlineKeyboardButton("📊 Daily Report", callback_data="admin_daily_report")],
-            [InlineKeyboardButton("🏦 Bank Statement Upload", callback_data="admin_upload_statement")],
-            [InlineKeyboardButton("📋 Reconciliation Report", callback_data="admin_reconciliation_report")],
-            [InlineKeyboardButton("👥 Manage Restaurants", callback_data="admin_manage_restaurants")]
+            [InlineKeyboardButton("🍳 Waiter Registration", callback_data="register_waiter")],
+            [InlineKeyboardButton("👨‍💼 Admin Login", callback_data="admin_login")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await update.message.reply_text(
-            "🔧 **Super Admin Panel**\n\nSelect an option:",
-            reply_markup=reply_markup,
-            parse_mode='Markdown'
-        )
-
-    async def show_restaurant_admin_menu(self, update: Update):
-        """Show Restaurant Admin menu - PRD compliant"""
-        keyboard = [
-            [InlineKeyboardButton("📊 My Restaurant Transactions", callback_data="restaurant_transactions")],
-            [InlineKeyboardButton("📈 Daily Summary", callback_data="restaurant_daily_summary")],
-            [InlineKeyboardButton("📤 Export CSV", callback_data="restaurant_export_csv")],
-            [InlineKeyboardButton("🏦 Upload Bank Statement", callback_data="restaurant_upload_statement")],
-            [InlineKeyboardButton("📋 Reconciliation Report", callback_data="restaurant_reconciliation")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_text(
-            "👨‍💼 **Restaurant Admin Panel**\n\nSelect an option:",
-            reply_markup=reply_markup,
-            parse_mode='Markdown'
-        )
-
-    async def show_waiter_menu(self, update: Update):
-        """Show Waiter menu - PRD compliant"""
-        keyboard = [
-            [InlineKeyboardButton("📸 Capture Payment", callback_data="capture_payment")],
-            [InlineKeyboardButton("📊 My Transactions", callback_data="waiter_my_transactions")],
-            [InlineKeyboardButton("ℹ️ Help", callback_data="waiter_help")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_text(
-            "🍳 **Waiter Panel**\n\nSelect an option:",
-            reply_markup=reply_markup,
-            parse_mode='Markdown'
+            "Please select your role:",
+            reply_markup=reply_markup
         )
 
     async def handle_admin_command(self, update: Update, context):
-        """Handle admin commands - PRD compliant role checking"""
+        """Handle admin commands"""
         user_id = update.effective_user.id
         
-        # Check if user is super admin
         if user_id != ADMIN_USER_ID:
-            await update.message.reply_text("❌ Super Admin access required!")
+            await update.message.reply_text("❌ Admin access required!")
             return
         
         # Log audit
         self.log_audit(user_id, "admin_command", "Super admin accessed admin panel")
         
-        # Show super admin menu
-        await self.show_super_admin_menu(update)
+        # Show admin menu
+        keyboard = [
+            [InlineKeyboardButton("📊 All Transactions", callback_data="admin_all_transactions")],
+            [InlineKeyboardButton("⏳ Pending Approvals", callback_data="admin_pending_approvals")],
+            [InlineKeyboardButton("📊 Daily Report", callback_data="admin_daily_report")],
+            [InlineKeyboardButton("🏦 Bank Statement Upload", callback_data="admin_upload_statement")],
+            [InlineKeyboardButton("📋 Reconciliation Report", callback_data="admin_reconciliation_report")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(
+            "🔧 **Admin Panel**\n\nSelect an option:",
+            reply_markup=reply_markup,
+            parse_mode='Markdown'
+        )
 
     async def handle_text_message(self, update: Update, context):
-        """Handle text messages - PRD compliant"""
+        """Handle text messages"""
         user_id = update.effective_user.id
         text = update.message.text
         
@@ -282,23 +234,17 @@ class VeriPayBot:
             # Log audit
             self.log_audit(user_id, "waiter_registration", f"Waiter {text} registered for restaurant {users[user_id]['restaurant']}")
             
-            await update.message.reply_text("✅ Registration complete!\n\nYour registration is pending Super Admin approval.\nYou will be notified once approved.")
+            await update.message.reply_text("✅ Registration complete!\n\nYour registration is pending admin approval.\nYou will be notified once approved.")
         
         else:
             await update.message.reply_text("Unknown command. Please use the menu buttons.")
 
     async def handle_photo_message(self, update: Update, context):
-        """Handle photo messages for OCR - PRD compliant"""
+        """Handle photo messages for OCR"""
         user_id = update.effective_user.id
         
         if user_id not in users:
             await update.message.reply_text("Please start with /start first. ❌ Login Failed")
-            return
-        
-        # Check role - only waiters can capture payments
-        user_role = users[user_id].get('role', 'waiter')
-        if user_role not in ['waiter', 'restaurant_admin', 'super_admin']:
-            await update.message.reply_text("❌ Only waiters can capture payments!")
             return
         
         if users[user_id].get('status') != 'approved':
@@ -364,12 +310,10 @@ class VeriPayBot:
             await update.message.reply_text("❌ Error processing receipt. Please try again.")
 
     async def handle_document_message(self, update: Update, context):
-        """Handle document messages for bank statement upload - PRD compliant"""
+        """Handle document messages for bank statement upload"""
         user_id = update.effective_user.id
         
-        # Check role - only admins can upload statements
-        user_role = users[user_id].get('role', 'waiter')
-        if user_role not in ['restaurant_admin', 'super_admin']:
+        if user_id != ADMIN_USER_ID:
             await update.message.reply_text("❌ Admin access required for bank statement upload!")
             return
         
@@ -498,6 +442,7 @@ class VeriPayBot:
         """Extract Dashen Bank statement transactions"""
         transactions = []
         # Implementation for Dashen statement parsing
+        # This would parse the statement format and extract transaction details
         return transactions
 
     def extract_cbe_statement_transactions(self, text: str) -> List[StatementTransaction]:
@@ -693,18 +638,12 @@ class VeriPayBot:
         return result
 
     async def handle_callback_query(self, update: Update, context):
-        """Handle callback queries - PRD compliant"""
+        """Handle callback queries"""
         query = update.callback_query
-        try:
-            await query.answer()
-        except Exception as e:
-            logger.warning(f"Callback query error: {e}")
-            return
-        
-        user_id = query.from_user.id
-        user_role = users.get(user_id, {}).get('role', 'waiter')
+        await query.answer()
         
         if query.data == "register_waiter":
+            user_id = query.from_user.id
             if user_id not in users:
                 users[user_id] = {
                     'name': '',
@@ -712,33 +651,20 @@ class VeriPayBot:
                     'phone': '',
                     'status': 'pending',
                     'waiter_id': '',
-                    'restaurant_id': '',
-                    'role': 'waiter'
+                    'restaurant_id': ''
                 }
             
             user_states[user_id] = UserState.WAITING_FOR_NAME
             await query.edit_message_text("Please provide your full name:")
         
-        elif query.data == "restaurant_admin_login":
-            await query.edit_message_text("❌ Restaurant Admin registration requires Super Admin approval. Please contact system administrator.")
-        
-        elif query.data == "super_admin_login":
+        elif query.data == "admin_login":
+            user_id = query.from_user.id
             if user_id == ADMIN_USER_ID:
-                users[user_id] = {
-                    'name': 'Super Admin',
-                    'role': 'super_admin',
-                    'status': 'approved'
-                }
-                await query.edit_message_text("✅ Super Admin access granted!")
-                await self.show_super_admin_menu(update)
+                await query.edit_message_text("✅ Admin access granted!\n\nUse /admin for admin functions.")
             else:
-                await query.edit_message_text("❌ Super Admin access required!")
+                await query.edit_message_text("❌ Admin access required!")
         
         elif query.data == "admin_all_transactions":
-            if user_role != 'super_admin':
-                await query.edit_message_text("❌ Super Admin access required!")
-                return
-            
             if not transactions:
                 await query.edit_message_text("📊 **All Transactions**\n\nNo transactions found.")
                 return
@@ -750,10 +676,6 @@ class VeriPayBot:
             await query.edit_message_text(message)
         
         elif query.data == "admin_pending_approvals":
-            if user_role != 'super_admin':
-                await query.edit_message_text("❌ Super Admin access required!")
-                return
-            
             if not pending_approvals:
                 await query.edit_message_text("✅ No pending approvals!")
                 return
@@ -779,10 +701,6 @@ class VeriPayBot:
             await query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
         
         elif query.data == "admin_daily_report":
-            if user_role != 'super_admin':
-                await query.edit_message_text("❌ Super Admin access required!")
-                return
-            
             today = datetime.now().date()
             today_transactions = [txn for txn in transactions.values() if txn.created_at.date() == today]
             
@@ -801,18 +719,10 @@ class VeriPayBot:
             await query.edit_message_text(message)
         
         elif query.data == "admin_upload_statement":
-            if user_role not in ['super_admin', 'restaurant_admin']:
-                await query.edit_message_text("❌ Admin access required!")
-                return
-            
             await query.edit_message_text("🏦 **Bank Statement Upload**\n\nPlease upload a PDF bank statement for reconciliation.")
             user_states[query.from_user.id] = UserState.UPLOADING_STATEMENT
         
         elif query.data == "admin_reconciliation_report":
-            if user_role not in ['super_admin', 'restaurant_admin']:
-                await query.edit_message_text("❌ Admin access required!")
-                return
-            
             if not bank_statements:
                 await query.edit_message_text("📋 **Reconciliation Report**\n\nNo bank statements uploaded yet.")
                 return
@@ -828,34 +738,30 @@ class VeriPayBot:
             await query.edit_message_text(message)
         
         elif query.data.startswith("approve_"):
-            if user_role != 'super_admin':
-                await query.edit_message_text("❌ Super Admin access required!")
-                return
+            user_id = int(query.data.split("_")[1])
             
-            user_id_to_approve = int(query.data.split("_")[1])
-            
-            if user_id_to_approve in pending_approvals:
+            if user_id in pending_approvals:
                 # Move to approved users
-                users[user_id_to_approve] = pending_approvals[user_id_to_approve]
-                users[user_id_to_approve]['status'] = 'approved'
-                users[user_id_to_approve]['role'] = 'waiter'
+                users[user_id] = pending_approvals[user_id]
+                users[user_id]['approved'] = True
+                users[user_id]['role'] = 'waiter'
                 
                 # Remove from pending
-                del pending_approvals[user_id_to_approve]
+                del pending_approvals[user_id]
                 
                 # Generate waiter ID
                 waiter_id = f"WTR{len(waiter_ids) + 1:05d}"
-                waiter_ids[user_id_to_approve] = waiter_id
+                waiter_ids[user_id] = waiter_id
                 
                 # Log audit
-                self.log_audit(ADMIN_USER_ID, "waiter_approved", f"Waiter {user_id_to_approve} approved with ID {waiter_id}")
+                self.log_audit(ADMIN_USER_ID, "waiter_approved", f"Waiter {user_id} approved with ID {waiter_id}")
                 
                 await query.edit_message_text(f"✅ **Approved!**\n\nWaiter ID: `{waiter_id}`", parse_mode='Markdown')
                 
                 # Notify the waiter
                 try:
                     await self.bot.send_message(
-                        user_id_to_approve,
+                        user_id,
                         f"🎉 **Congratulations!**\n\nYour registration has been approved!\n\n**Waiter ID:** `{waiter_id}`\n\nYou can now start capturing payments!",
                         parse_mode='Markdown'
                     )
@@ -865,19 +771,15 @@ class VeriPayBot:
                 await query.edit_message_text("❌ User not found in pending approvals!")
         
         elif query.data.startswith("reject_"):
-            if user_role != 'super_admin':
-                await query.edit_message_text("❌ Super Admin access required!")
-                return
+            user_id = int(query.data.split("_")[1])
             
-            user_id_to_reject = int(query.data.split("_")[1])
-            
-            if user_id_to_reject in pending_approvals:
-                del pending_approvals[user_id_to_reject]
+            if user_id in pending_approvals:
+                del pending_approvals[user_id]
                 
                 # Log audit
-                self.log_audit(ADMIN_USER_ID, "waiter_rejected", f"Waiter {user_id_to_reject} rejected")
+                self.log_audit(ADMIN_USER_ID, "waiter_rejected", f"Waiter {user_id} rejected")
                 
-                await query.edit_message_text(f"❌ **Rejected!**\n\nUser {user_id_to_reject} has been rejected.", parse_mode='Markdown')
+                await query.edit_message_text(f"❌ **Rejected!**\n\nUser {user_id} has been rejected.", parse_mode='Markdown')
             else:
                 await query.edit_message_text("❌ User not found in pending approvals!")
 
@@ -893,9 +795,9 @@ class VeriPayBot:
         logger.info(f"Audit: {action} by {user_id}: {details}")
 
     async def run(self):
-        """Run the bot - FIXED for proper polling"""
+        """Run the bot"""
         try:
-            logger.info("Starting VeriPay Bot - PRD COMPLIANT VERSION...")
+            logger.info("Starting VeriPay Bot - COMPLETE VERSION...")
             logger.info("Send a message to @Verifpay_bot now!")
             
             # Start the application
@@ -903,23 +805,16 @@ class VeriPayBot:
             await self.application.start()
             await self.application.updater.start_polling()
             
-            # Keep running with proper signal handling
-            try:
-                # Wait for shutdown signal
-                await asyncio.Event().wait()
-            except KeyboardInterrupt:
-                logger.info("Received shutdown signal. Stopping bot gracefully...")
+            # Keep running
+            await asyncio.Event().wait()
             
+        except KeyboardInterrupt:
+            logger.info("Received shutdown signal. Stopping bot gracefully...")
         except Exception as e:
             logger.error(f"Error running bot: {e}")
-            import traceback
-            traceback.print_exc()
         finally:
-            try:
-                await self.application.stop()
-                logger.info("Bot stopped.")
-            except:
-                pass
+            await self.application.stop()
+            logger.info("Bot stopped.")
 
 if __name__ == "__main__":
     bot = VeriPayBot()
