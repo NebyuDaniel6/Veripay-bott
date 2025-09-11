@@ -1,0 +1,17 @@
+# Core dependencies
+python-telegram-bot==20.7
+google-cloud-vision==3.4.4
+google-auth==2.23.4
+google-auth-oauthlib==1.1.0
+google-auth-httplib2==0.1.1
+
+# PDF processing
+pdfplumber==0.10.3
+PyPDF2==3.0.1
+
+# Report generation
+reportlab==4.0.7
+
+# Additional utilities
+aiohttp==3.9.1
+asyncio 
