@@ -4,14 +4,14 @@ from io import BytesIO
 from typing import Tuple, Dict
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
-from bot_v2.state import StateStore
-from bot_v2.storage import Storage
-from bot_v2.ocr import VisionOCR
+from state import StateStore
+from storage import Storage
+from ocr import VisionOCR
 
 # Import legacy UI if enabled
 LEGACY_UI = os.environ.get("LEGACY_UI", "0") == "1"
 if LEGACY_UI:
-    from bot_v2.ui_legacy import (
+    from ui_legacy import (
         LANGUAGES, UserRole, UserState, BANK_BUTTONS,
         get_text, build_language_selection_keyboard, build_main_menu_keyboard,
         build_super_admin_menu_keyboard, build_restaurant_admin_menu_keyboard,
