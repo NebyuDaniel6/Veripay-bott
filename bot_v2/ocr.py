@@ -129,7 +129,7 @@ class VisionOCR:
                 logger.warning(f"Failed to load credentials from direct JSON: {e}")
         
         # Method 3: File path fallback
-        creds_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', '/Users/macbook/veripay/veripay-credentials.json')
+        creds_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', 'veripay-credentials.json')
         try:
             credentials = service_account.Credentials.from_service_account_file(creds_path)
             self.client = vision.ImageAnnotatorClient(credentials=credentials)
@@ -147,7 +147,7 @@ class VisionOCR:
                 return
             except Exception as e:
                 logger.warning(f"Failed to load credentials from JSON: {e}")
-        creds_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', '/Users/macbook/veripay/veripay-credentials.json')
+        creds_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', 'veripay-credentials.json')
         try:
             credentials = service_account.Credentials.from_service_account_file(creds_path)
             self.client = vision.ImageAnnotatorClient(credentials=credentials)
