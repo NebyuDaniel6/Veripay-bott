@@ -129,6 +129,7 @@ class VisionOCR:
                 logger.warning(f"Failed to load credentials from direct JSON: {e}")
         
         # Method 3: File path fallback
+        print(f"DEBUG: Looking for credentials at: {creds_path}")
         creds_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', 'veripay-credentials.json')
         try:
             credentials = service_account.Credentials.from_service_account_file(creds_path)
@@ -147,6 +148,7 @@ class VisionOCR:
                 return
             except Exception as e:
                 logger.warning(f"Failed to load credentials from JSON: {e}")
+        print(f"DEBUG: Looking for credentials at: {creds_path}")
         creds_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', 'veripay-credentials.json')
         try:
             credentials = service_account.Credentials.from_service_account_file(creds_path)
