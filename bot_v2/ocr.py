@@ -132,6 +132,7 @@ class VisionOCR:
             logger.info("Vision initialized from file path")
         except Exception as e:
             logger.warning(f"Vision unavailable: {e}")
+            logger.info("Bot will continue without OCR functionality")
             self.client = None
         if creds_json:
             try:
@@ -148,6 +149,7 @@ class VisionOCR:
             self.client = vision.ImageAnnotatorClient(credentials=credentials)
         except Exception as e:
             logger.warning(f"Vision unavailable: {e}")
+            logger.info("Bot will continue without OCR functionality")
             self.client = None
 
     def _fallback_basic(self, text: str, bank_hint: Optional[str]) -> Dict[str, Any]:
