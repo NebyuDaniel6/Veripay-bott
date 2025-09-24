@@ -44,19 +44,32 @@ logger = logging.getLogger(__name__)
 
 class VisionOCR:
     def __init__(self):
+        # Try to get credentials from environment variable JSON first
         creds_json = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS_JSON')
         if creds_json:
             try:
+                # Clean up the JSON string - remove any extra whitespace/newlines
+                creds_json = creds_json.strip()
+                # Parse JSON from environment variable
                 creds_dict = json.loads(creds_json)
                 credentials = service_account.Credentials.from_service_account_info(creds_dict)
                 self.client = vision.ImageAnnotatorClient(credentials=credentials)
                 logger.info("Vision initialized from environment variable JSON")
                 return
+            except json.JSONDecodeError as e:
+                logger.warning(f"Failed to parse JSON credentials: {e}")
             except Exception as e:
                 logger.warning(f"Failed to load credentials from JSON: {e}")
+        
+        # Fallback to file path
         creds_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', '/Users/macbook/veripay/veripay-credentials.json')
         try:
             credentials = service_account.Credentials.from_service_account_file(creds_path)
+            self.client = vision.ImageAnnotatorClient(credentials=credentials)
+            logger.info("Vision initialized from file path")
+        except Exception as e:
+            logger.warning(f"Vision unavailable: {e}")
+            self.client = None
             self.client = vision.ImageAnnotatorClient(credentials=credentials)
         except Exception as e:
             logger.warning(f"Vision unavailable: {e}")
