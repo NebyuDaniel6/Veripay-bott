@@ -1222,6 +1222,9 @@ async def handle_restaurant_admin_action(update: Update, action: str):
         await show_restaurant_settings(update)
     elif action == "restaurant_reconciliation":
         await show_restaurant_reconciliation(update)
+    elif action == "restaurant_upload_statement":
+        await show_upload_statement_instructions(update)
+        await show_restaurant_reconciliation(update)
     else:
         await update.callback_query.edit_message_text("🏪 Restaurant Admin feature coming soon...")
 
@@ -1266,6 +1269,35 @@ async def show_restaurant_settings(update: Update):
 
 async def show_restaurant_reconciliation(update: Update):
     """Show restaurant reconciliation (placeholder)"""
+
+async def show_upload_statement_instructions(update: Update):
+    """Show instructions for uploading bank statement"""
+    user_id = update.effective_user.id
+    
+    instructions = """📄 **Upload Bank Statement** 📄
+
+To reconcile your transactions:
+
+1️⃣ **Upload your weekly bank statement PDF**
+2️⃣ **The bot will extract transaction references**
+3️⃣ **Compare with waiter transactions**
+4️⃣ **Show reconciliation results**
+
+**Supported formats:**
+• PDF bank statements
+• Transaction reference numbers
+• Ethiopian bank formats (CBE, Dashen, Abyssinia, Telebirr)
+
+**Just upload your PDF now!** 📎"""
+    
+    keyboard = [[InlineKeyboardButton("🔙 Back to Restaurant Menu", callback_data="back_to_restaurant_admin")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.callback_query.edit_message_text(
+        text=instructions,
+        reply_markup=reply_markup,
+        parse_mode=Markdown
+    )
     user_id = update.callback_query.from_user.id
     
     text = "🔄 **Make Reconciliation**\n\n"
