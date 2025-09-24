@@ -7,7 +7,9 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, Cal
 from state import StateStore
 from storage import Storage
 from ocr import VisionOCR
-
+from reconciliation import reconciler
+import PyPDF2
+import io
 # Import legacy UI if enabled
 LEGACY_UI = os.environ.get("LEGACY_UI", "0") == "1"
 if LEGACY_UI:
@@ -772,6 +774,65 @@ async def notify_super_admin_restaurant_registration(user_id: int, restaurant_da
     except Exception as e:
         logger.error(f"Error notifying Super Admin: {e}")
 
+
+async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle PDF document uploads for reconciliation"""
+    user_id = update.effective_user.id
+    
+    # Only restaurant admins can upload statements
+    if not LEGACY_UI or user_id not in users or users[user_id].role != UserRole.RESTAURANT_ADMIN:
+        await update.message.reply_text("❌ Only restaurant admins can upload bank statements.")
+        return
+    
+    document = update.message.document
+    
+    # Check if it's a PDF
+    if not document.mime_type == 'application/pdf':
+        await update.message.reply_text("❌ Please upload a PDF file.")
+        return
+    
+    try:
+        # Download the PDF
+        file = await context.bot.get_file(document.file_id)
+        pdf_bytes = await file.download_as_bytearray()
+        
+        # Extract text from PDF
+        pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_bytes))
+        pdf_text = ""
+        for page in pdf_reader.pages:
+            pdf_text += page.extract_text()
+        
+        # Extract references from PDF
+        bank_refs = reconciler.parser.extract_references(pdf_text)
+        
+        if not bank_refs:
+            await update.message.reply_text("❌ No transaction references found in the PDF. Please check the format.")
+            return
+        
+        # Get waiter transaction references from database
+        restaurant = storage.get_restaurant_by_owner(user_id)
+        if not restaurant:
+            await update.message.reply_text("❌ Restaurant not found.")
+            return
+        
+        waiter_transactions = storage.list_transactions_by_restaurant(restaurant['id'], limit=1000)
+        waiter_refs = set()
+        for tx in waiter_transactions:
+            if tx.get('original_ref') and tx['original_ref'] != 'Unknown':
+                waiter_refs.add(tx['original_ref'])
+        
+        # Perform reconciliation
+        result = reconciler.reconcile(bank_refs, waiter_refs)
+        
+        # Format and send result
+        result_text = reconciler.format_result(result)
+        await update.message.reply_text(result_text)
+        
+        logger.info(f"Reconciliation completed for restaurant {restaurant['id']}: {result.matched_count} matched, {result.missing_count} missing, {result.extra_count} extra")
+        
+    except Exception as e:
+        logger.error(f"Error processing PDF for user {user_id}: {e}", exc_info=True)
+        await update.message.reply_text(f"❌ Error processing PDF: {e}")
 async def handle_super_admin_action(update: Update, action: str):
     """Handle Super Admin actions
     PRD:M1.4 Restaurant approval by Super Admin; Rules: role separation
@@ -1229,7 +1290,7 @@ def create_application(token: str):
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_handler(MessageHandler(filters.PHOTO & ~filters.COMMAND, handle_photo))
-    
+    app.add_handler(MessageHandler(filters.Document.PDF, handle_document))    
     if LEGACY_UI:
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
 
