@@ -44,6 +44,7 @@ logger = logging.getLogger(__name__)
 
 class VisionOCR:
     def __init__(self):
+        print("DEBUG: Starting VisionOCR initialization")
         # Method 1: Try individual environment variables first
         project_id = os.environ.get('GOOGLE_PROJECT_ID')
         private_key_id = os.environ.get('GOOGLE_PRIVATE_KEY_ID')
