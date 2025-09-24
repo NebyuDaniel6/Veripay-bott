@@ -44,11 +44,17 @@ logger = logging.getLogger(__name__)
 
 class VisionOCR:
     def __init__(self):
+        # Try multiple methods to load credentials
+        
+        # Method 1: Base64 encoded JSON from environment variable
         creds_b64 = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS_JSON')
         if creds_b64:
             try:
                 import base64
+                # Decode Base64 and clean up the JSON
                 creds_json = base64.b64decode(creds_b64).decode('utf-8')
+                # Remove any control characters that might cause issues
+                creds_json = ''.join(char for char in creds_json if ord(char) >= 32 or char in '\n\r\t')
                 creds_dict = json.loads(creds_json)
                 credentials = service_account.Credentials.from_service_account_info(creds_dict)
                 self.client = vision.ImageAnnotatorClient(credentials=credentials)
@@ -56,7 +62,30 @@ class VisionOCR:
                 return
             except Exception as e:
                 logger.warning(f"Failed to load credentials from Base64 JSON: {e}")
+        
+        # Method 2: Direct JSON from environment variable
         creds_json = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS_JSON')
+        if creds_json and not creds_b64:  # Only if it wasn't Base64
+            try:
+                # Clean up the JSON string
+                creds_json = creds_json.strip()
+                creds_dict = json.loads(creds_json)
+                credentials = service_account.Credentials.from_service_account_info(creds_dict)
+                self.client = vision.ImageAnnotatorClient(credentials=credentials)
+                logger.info("Vision initialized from direct JSON environment variable")
+                return
+            except Exception as e:
+                logger.warning(f"Failed to load credentials from direct JSON: {e}")
+        
+        # Method 3: File path fallback
+        creds_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', '/Users/macbook/veripay/veripay-credentials.json')
+        try:
+            credentials = service_account.Credentials.from_service_account_file(creds_path)
+            self.client = vision.ImageAnnotatorClient(credentials=credentials)
+            logger.info("Vision initialized from file path")
+        except Exception as e:
+            logger.warning(f"Vision unavailable: {e}")
+            self.client = None
         if creds_json:
             try:
                 creds_dict = json.loads(creds_json)
