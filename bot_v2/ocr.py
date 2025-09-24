@@ -12,59 +12,98 @@ class VisionOCR:
         print("=== VISION OCR INITIALIZATION ===")
         self.client = None
         
-        # Get the JSON from environment variable
-        creds_json = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS_JSON')
+        # Method 1: Try individual environment variables (most reliable)
+        project_id = os.environ.get('GOOGLE_PROJECT_ID')
+        private_key_id = os.environ.get('GOOGLE_PRIVATE_KEY_ID')
+        private_key = os.environ.get('GOOGLE_PRIVATE_KEY')
+        client_email = os.environ.get('GOOGLE_CLIENT_EMAIL')
+        client_id = os.environ.get('GOOGLE_CLIENT_ID')
         
-        if not creds_json:
-            print("❌ No GOOGLE_APPLICATION_CREDENTIALS_JSON found")
-            logger.warning("Vision unavailable: No credentials JSON found")
-            logger.info("Bot will continue without OCR functionality")
-            return
-            
-        print(f"✅ Found credentials JSON (length: {len(creds_json)})")
-        print(f"First 100 chars: {repr(creds_json[:100])}")
-        print(f"Last 100 chars: {repr(creds_json[-100:])}")
+        print(f"DEBUG: GOOGLE_PROJECT_ID = {'SET' if project_id else 'NOT SET'}")
+        print(f"DEBUG: GOOGLE_PRIVATE_KEY_ID = {'SET' if private_key_id else 'NOT SET'}")
+        print(f"DEBUG: GOOGLE_PRIVATE_KEY = {'SET' if private_key else 'NOT SET'}")
+        print(f"DEBUG: GOOGLE_CLIENT_EMAIL = {'SET' if client_email else 'NOT SET'}")
+        print(f"DEBUG: GOOGLE_CLIENT_ID = {'SET' if client_id else 'NOT SET'}")
         
-        try:
-            # Try to parse the JSON first to validate it
-            print("🔍 Attempting to parse JSON...")
-            creds_dict = json.loads(creds_json)
-            print("✅ JSON parsed successfully!")
-            
-            # Create a temporary file with the credentials
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_file:
-                # Write the parsed JSON back to ensure proper formatting
-                json.dump(creds_dict, temp_file, indent=2)
-                temp_file_path = temp_file.name
+        if all([project_id, private_key_id, private_key, client_email, client_id]):
+            print("✅ All individual environment variables found!")
+            try:
+                # Clean private key (replace \\n with actual newlines)
+                private_key = private_key.replace('\\n', '\n')
                 
-            print(f"✅ Created temporary credentials file: {temp_file_path}")
-            
-            # Load credentials from the temporary file
-            credentials = service_account.Credentials.from_service_account_file(temp_file_path)
+                # Create credentials info
+                creds_info = {
+                    "type": "service_account",
+                    "project_id": project_id,
+                    "private_key_id": private_key_id,
+                    "private_key": private_key,
+                    "client_email": client_email,
+                    "client_id": client_id,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                    "client_x509_cert_url": f"https://www.googleapis.com/robot/v1/metadata/x509/{client_email}",
+                    "universe_domain": "googleapis.com"
+                }
+                
+                print("🔍 Creating credentials from individual variables...")
+                credentials = service_account.Credentials.from_service_account_info(creds_info)
+                self.client = vision.ImageAnnotatorClient(credentials=credentials)
+                
+                logger.info("✅ Vision OCR initialized from individual environment variables!")
+                print("=== VISION OCR INITIALIZATION COMPLETE ===")
+                return
+                
+            except Exception as e:
+                print(f"❌ Individual variables failed: {e}")
+                print(f"Error type: {type(e).__name__}")
+                logger.warning(f"Vision unavailable: Individual variables failed - {e}")
+        
+        # Method 2: Try JSON environment variable as fallback
+        creds_json = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS_JSON')
+        if creds_json:
+            print(f"✅ Found JSON credentials (length: {len(creds_json)})")
+            try:
+                # Create temporary file directly from JSON string
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_file:
+                    temp_file.write(creds_json)
+                    temp_file_path = temp_file.name
+                    
+                print(f"✅ Created temporary file: {temp_file_path}")
+                
+                # Load from file
+                credentials = service_account.Credentials.from_service_account_file(temp_file_path)
+                self.client = vision.ImageAnnotatorClient(credentials=credentials)
+                
+                # Clean up
+                os.unlink(temp_file_path)
+                
+                logger.info("✅ Vision OCR initialized from JSON environment variable!")
+                print("=== VISION OCR INITIALIZATION COMPLETE ===")
+                return
+                
+            except Exception as e:
+                print(f"❌ JSON method failed: {e}")
+                print(f"Error type: {type(e).__name__}")
+                logger.warning(f"Vision unavailable: JSON method failed - {e}")
+        
+        # Method 3: Try file path
+        creds_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', 'veripay-credentials.json')
+        print(f"🔍 Trying file path: {creds_path}")
+        try:
+            credentials = service_account.Credentials.from_service_account_file(creds_path)
             self.client = vision.ImageAnnotatorClient(credentials=credentials)
-            
-            # Clean up the temporary file
-            os.unlink(temp_file_path)
-            print("✅ Cleaned up temporary file")
-            
-            logger.info("✅ Vision OCR initialized successfully!")
+            logger.info("✅ Vision OCR initialized from file!")
             print("=== VISION OCR INITIALIZATION COMPLETE ===")
-            
-        except json.JSONDecodeError as e:
-            print(f"❌ JSON parsing error: {e}")
-            print(f"Error position: {e.pos}")
-            if e.pos < len(creds_json):
-                print(f"Character at error: {repr(creds_json[e.pos:e.pos+20])}")
-            logger.warning(f"Vision unavailable: Invalid JSON format - {e}")
-            logger.info("Bot will continue without OCR functionality")
-            self.client = None
-            
+            return
         except Exception as e:
-            print(f"❌ Credentials error: {e}")
-            print(f"Error type: {type(e).__name__}")
-            logger.warning(f"Vision unavailable: {e}")
-            logger.info("Bot will continue without OCR functionality")
-            self.client = None
+            print(f"❌ File method failed: {e}")
+            logger.warning(f"Vision unavailable: File method failed - {e}")
+        
+        logger.warning("Vision unavailable: All methods failed")
+        logger.info("Bot will continue without OCR functionality")
+        print("=== VISION OCR INITIALIZATION FAILED ===")
+        self.client = None
 
     def extract_text_from_image(self, image_bytes):
         if not self.client:
