@@ -53,6 +53,21 @@ class VisionOCR:
         
         if all([project_id, private_key_id, private_key, client_email, client_id]):
             try:
+                # Fix private key formatting - ensure proper line breaks
+                if '\\n' in private_key:
+                    private_key = private_key.replace('\\n', '\n')
+                elif '\\\\n' in private_key:
+                    private_key = private_key.replace('\\\\n', '\n')
+                
+                # Ensure the private key has proper BEGIN/END markers
+                if not private_key.startswith('-----BEGIN PRIVATE KEY-----'):
+                    private_key = '-----BEGIN PRIVATE KEY-----\n' + private_key
+                if not private_key.endswith('-----END PRIVATE KEY-----\n'):
+                    if private_key.endswith('-----END PRIVATE KEY-----'):
+                        private_key = private_key + '\n'
+                    else:
+                        private_key = private_key + '\n-----END PRIVATE KEY-----\n'
+                
                 creds_dict = {
                     "type": "service_account",
                     "project_id": project_id,
@@ -72,6 +87,8 @@ class VisionOCR:
                 return
             except Exception as e:
                 logger.warning(f"Failed to load credentials from individual variables: {e}")
+        
+        # Fallback to existing methods...
         
         # Fallback to existing methods
         # Try multiple methods to load credentials
