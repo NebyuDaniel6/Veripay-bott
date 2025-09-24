@@ -12,71 +12,43 @@ class VisionOCR:
         print("=== VISION OCR INITIALIZATION ===")
         self.client = None
         
-        # Method 1: Try individual environment variables (most reliable)
-        project_id = os.environ.get('GOOGLE_PROJECT_ID')
-        private_key_id = os.environ.get('GOOGLE_PRIVATE_KEY_ID')
-        private_key = os.environ.get('GOOGLE_PRIVATE_KEY')
-        client_email = os.environ.get('GOOGLE_CLIENT_EMAIL')
-        client_id = os.environ.get('GOOGLE_CLIENT_ID')
+        # Method 1: Try Render secret files with correct paths
+        secret_file_paths = [
+            '/opt/render/project/src/veripay-credentials.json',
+            '/opt/render/project/veripay-credentials.json', 
+            './veripay-credentials.json',
+            'veripay-credentials.json',
+            '/tmp/veripay-credentials.json'
+        ]
         
-        print(f"DEBUG: GOOGLE_PROJECT_ID = {'SET' if project_id else 'NOT SET'}")
-        print(f"DEBUG: GOOGLE_PRIVATE_KEY_ID = {'SET' if private_key_id else 'NOT SET'}")
-        print(f"DEBUG: GOOGLE_PRIVATE_KEY = {'SET' if private_key else 'NOT SET'}")
-        print(f"DEBUG: GOOGLE_CLIENT_EMAIL = {'SET' if client_email else 'NOT SET'}")
-        print(f"DEBUG: GOOGLE_CLIENT_ID = {'SET' if client_id else 'NOT SET'}")
-        
-        if all([project_id, private_key_id, private_key, client_email, client_id]):
-            print("✅ All individual environment variables found!")
+        for creds_path in secret_file_paths:
+            print(f"🔍 Trying file path: {creds_path}")
             try:
-                # Clean private key (replace \\n with actual newlines)
-                private_key = private_key.replace('\\n', '\n')
-                
-                # Create credentials info
-                creds_info = {
-                    "type": "service_account",
-                    "project_id": project_id,
-                    "private_key_id": private_key_id,
-                    "private_key": private_key,
-                    "client_email": client_email,
-                    "client_id": client_id,
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token",
-                    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-                    "client_x509_cert_url": f"https://www.googleapis.com/robot/v1/metadata/x509/{client_email}",
-                    "universe_domain": "googleapis.com"
-                }
-                
-                print("🔍 Creating credentials from individual variables...")
-                credentials = service_account.Credentials.from_service_account_info(creds_info)
-                self.client = vision.ImageAnnotatorClient(credentials=credentials)
-                
-                logger.info("✅ Vision OCR initialized from individual environment variables!")
-                print("=== VISION OCR INITIALIZATION COMPLETE ===")
-                return
-                
+                if os.path.exists(creds_path):
+                    print(f"✅ File exists at: {creds_path}")
+                    credentials = service_account.Credentials.from_service_account_file(creds_path)
+                    self.client = vision.ImageAnnotatorClient(credentials=credentials)
+                    logger.info(f"✅ Vision OCR initialized from file: {creds_path}")
+                    print("=== VISION OCR INITIALIZATION COMPLETE ===")
+                    return
+                else:
+                    print(f"❌ File not found at: {creds_path}")
             except Exception as e:
-                print(f"❌ Individual variables failed: {e}")
-                print(f"Error type: {type(e).__name__}")
-                logger.warning(f"Vision unavailable: Individual variables failed - {e}")
+                print(f"❌ Failed to load from {creds_path}: {e}")
         
-        # Method 2: Try JSON environment variable as fallback
+        # Method 2: Try to create credentials file from environment variable
         creds_json = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS_JSON')
         if creds_json:
             print(f"✅ Found JSON credentials (length: {len(creds_json)})")
             try:
-                # Create temporary file directly from JSON string
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_file:
-                    temp_file.write(creds_json)
-                    temp_file_path = temp_file.name
-                    
-                print(f"✅ Created temporary file: {temp_file_path}")
+                # Try to write to a known location
+                creds_path = '/tmp/veripay-credentials.json'
+                with open(creds_path, 'w') as f:
+                    f.write(creds_json)
                 
-                # Load from file
-                credentials = service_account.Credentials.from_service_account_file(temp_file_path)
+                print(f"✅ Created credentials file at: {creds_path}")
+                credentials = service_account.Credentials.from_service_account_file(creds_path)
                 self.client = vision.ImageAnnotatorClient(credentials=credentials)
-                
-                # Clean up
-                os.unlink(temp_file_path)
                 
                 logger.info("✅ Vision OCR initialized from JSON environment variable!")
                 print("=== VISION OCR INITIALIZATION COMPLETE ===")
@@ -87,18 +59,39 @@ class VisionOCR:
                 print(f"Error type: {type(e).__name__}")
                 logger.warning(f"Vision unavailable: JSON method failed - {e}")
         
-        # Method 3: Try file path
-        creds_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', 'veripay-credentials.json')
-        print(f"🔍 Trying file path: {creds_path}")
-        try:
-            credentials = service_account.Credentials.from_service_account_file(creds_path)
-            self.client = vision.ImageAnnotatorClient(credentials=credentials)
-            logger.info("✅ Vision OCR initialized from file!")
-            print("=== VISION OCR INITIALIZATION COMPLETE ===")
-            return
-        except Exception as e:
-            print(f"❌ File method failed: {e}")
-            logger.warning(f"Vision unavailable: File method failed - {e}")
+        # Method 3: Try individual environment variables as last resort
+        project_id = os.environ.get('GOOGLE_PROJECT_ID')
+        private_key = os.environ.get('GOOGLE_PRIVATE_KEY')
+        client_email = os.environ.get('GOOGLE_CLIENT_EMAIL')
+        
+        if all([project_id, private_key, client_email]):
+            print("�� Trying individual environment variables...")
+            try:
+                private_key = private_key.replace('\\n', '\n')
+                creds_info = {
+                    "type": "service_account",
+                    "project_id": project_id,
+                    "private_key_id": os.environ.get('GOOGLE_PRIVATE_KEY_ID', ''),
+                    "private_key": private_key,
+                    "client_email": client_email,
+                    "client_id": os.environ.get('GOOGLE_CLIENT_ID', ''),
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                    "client_x509_cert_url": f"https://www.googleapis.com/robot/v1/metadata/x509/{client_email}",
+                    "universe_domain": "googleapis.com"
+                }
+                
+                credentials = service_account.Credentials.from_service_account_info(creds_info)
+                self.client = vision.ImageAnnotatorClient(credentials=credentials)
+                
+                logger.info("✅ Vision OCR initialized from individual environment variables!")
+                print("=== VISION OCR INITIALIZATION COMPLETE ===")
+                return
+                
+            except Exception as e:
+                print(f"❌ Individual variables failed: {e}")
+                logger.warning(f"Vision unavailable: Individual variables failed - {e}")
         
         logger.warning("Vision unavailable: All methods failed")
         logger.info("Bot will continue without OCR functionality")
