@@ -116,6 +116,10 @@ class VisionOCR:
             try:
                 # Clean up the JSON string
                 creds_json = creds_json.strip()
+                # Remove all line breaks and extra whitespace to make it single-line
+                creds_json = "".join(creds_json.split())
+                # Add back necessary spaces after colons and commas
+                creds_json = creds_json.replace(":",": ").replace(",",", ")
                 creds_dict = json.loads(creds_json)
                 credentials = service_account.Credentials.from_service_account_info(creds_dict)
                 self.client = vision.ImageAnnotatorClient(credentials=credentials)
