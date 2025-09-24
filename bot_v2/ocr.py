@@ -6,25 +6,38 @@ from google.cloud import vision
 from google.oauth2 import service_account
 
 # Bank-specific parsers
+# Prefer local imports; fall back to absolute to support both local and packaged runs
 try:
-    from bot_v2.ocr_parsers import dashen as dashen_parser
+    from ocr_parsers import dashen as dashen_parser  # local
 except Exception:
-    dashen_parser = None
+    try:
+        from bot_v2.ocr_parsers import dashen as dashen_parser  # absolute
+    except Exception:
+        dashen_parser = None
 
 try:
-    from bot_v2.ocr_parsers import telebirr as telebirr_parser
+    from ocr_parsers import telebirr as telebirr_parser
 except Exception:
-    telebirr_parser = None
+    try:
+        from bot_v2.ocr_parsers import telebirr as telebirr_parser
+    except Exception:
+        telebirr_parser = None
 
 try:
-    from bot_v2.ocr_parsers import cbe as cbe_parser
+    from ocr_parsers import cbe as cbe_parser
 except Exception:
-    cbe_parser = None
+    try:
+        from bot_v2.ocr_parsers import cbe as cbe_parser
+    except Exception:
+        cbe_parser = None
 
 try:
-    from bot_v2.ocr_parsers import abyssinia as abyssinia_parser
+    from ocr_parsers import abyssinia as abyssinia_parser
 except Exception:
-    abyssinia_parser = None
+    try:
+        from bot_v2.ocr_parsers import abyssinia as abyssinia_parser
+    except Exception:
+        abyssinia_parser = None
 
 logger = logging.getLogger(__name__)
 
@@ -41,11 +54,11 @@ class VisionOCR:
     def _fallback_basic(self, text: str, bank_hint: Optional[str]) -> Dict[str, Any]:
         data: Dict[str, Any] = {"raw_text": text}
         bank = (bank_hint or "").lower()
-        if "telebirr" in bank:
+        if "telebirr" in bank or "telebirr" in text.lower():
             data["bank"] = "Telebirr"
-        elif "dashen" in bank:
+        elif "dashen" in bank or "dashen" in text.lower():
             data["bank"] = "Dashen Bank"
-        elif "abyssinia" in bank:
+        elif "abyssinia" in bank or "bank of abyssinia" in text.lower():
             data["bank"] = "Bank of Abyssinia"
         else:
             data["bank"] = "Commercial Bank of Ethiopia" if ("cbe" in bank or "commercial bank of ethiopia" in text.lower()) else "Unknown"
@@ -73,7 +86,19 @@ class VisionOCR:
             elif "abyssinia" in bank_l and abyssinia_parser:
                 parsed = abyssinia_parser.extract_fields(full_text)
             else:
-                parsed = self._fallback_basic(full_text, bank_hint)
+                # Try lightweight auto-detect when hint is missing
+                auto = self._fallback_basic(full_text, bank_hint)
+                b = auto.get("bank", "").lower()
+                if "dashen" in b and dashen_parser:
+                    parsed = dashen_parser.extract_fields(full_text)
+                elif "telebirr" in b and telebirr_parser:
+                    parsed = telebirr_parser.extract_fields(full_text)
+                elif "abyssinia" in b and abyssinia_parser:
+                    parsed = abyssinia_parser.extract_fields(full_text)
+                elif "commercial bank of ethiopia" in b and cbe_parser:
+                    parsed = cbe_parser.extract_fields(full_text)
+                else:
+                    parsed = auto
         except Exception as e:
             logger.warning(f"Parser error for bank '{bank_hint}': {e}")
             parsed = self._fallback_basic(full_text, bank_hint)

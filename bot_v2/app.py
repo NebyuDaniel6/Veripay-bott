@@ -3,14 +3,14 @@ import os
 from io import BytesIO
 from typing import Tuple, Dict
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from state import StateStore
 from storage import Storage
 from ocr import VisionOCR
-from reconciliation import reconciler
-import PyPDF2
-import io
+
 # Import legacy UI if enabled
+from m2_handler import handle_upload_statement, handle_document_upload, handle_reconciliation
 LEGACY_UI = os.environ.get("LEGACY_UI", "0") == "1"
 if LEGACY_UI:
     from ui_legacy import (
@@ -126,7 +126,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # User exists - restore their role and state
         role = db_user.get('role', 'NEW_USER')
         try:
-            user_role = UserRole[role]
+            user_role = getattr(UserRole, role, UserRole.NEW_USER)
         except KeyError:
             user_role = UserRole.NEW_USER
         
@@ -217,6 +217,12 @@ async def show_super_admin_menu(update: Update):
         await update.message.reply_text(text, reply_markup=keyboard, parse_mode='Markdown')
     elif update.callback_query:
         await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    # send persistent reply keyboard
+    try:
+        reply_kb = ReplyKeyboardMarkup([[KeyboardButton("🏠 Home"), KeyboardButton("🧭 Menu"), KeyboardButton("❓ Help")]], resize_keyboard=True, one_time_keyboard=False)
+        await update.effective_chat.send_message(" ", reply_markup=reply_kb)
+    except Exception:
+        pass
 
 async def show_restaurant_admin_menu(update: Update):
     """Show Restaurant Admin menu"""
@@ -228,6 +234,12 @@ async def show_restaurant_admin_menu(update: Update):
         await update.message.reply_text(text, reply_markup=keyboard, parse_mode='Markdown')
     elif update.callback_query:
         await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    # send persistent reply keyboard
+    try:
+        reply_kb = ReplyKeyboardMarkup([[KeyboardButton("🏠 Home"), KeyboardButton("🧭 Menu"), KeyboardButton("❓ Help")]], resize_keyboard=True, one_time_keyboard=False)
+        await update.effective_chat.send_message(" ", reply_markup=reply_kb)
+    except Exception:
+        pass
 
 async def show_waiter_menu(update: Update):
     """Show Waiter menu"""
@@ -239,6 +251,12 @@ async def show_waiter_menu(update: Update):
         await update.message.reply_text(text, reply_markup=keyboard, parse_mode='Markdown')
     elif update.callback_query:
         await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    # send persistent reply keyboard
+    try:
+        reply_kb = ReplyKeyboardMarkup([[KeyboardButton("🏠 Home"), KeyboardButton("🧭 Menu"), KeyboardButton("❓ Help")]], resize_keyboard=True, one_time_keyboard=False)
+        await update.effective_chat.send_message(" ", reply_markup=reply_kb)
+    except Exception:
+        pass
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Callback dispatcher
@@ -481,6 +499,17 @@ async def setup_persistent_keyboard(update: Update, user_id: int, role: str):
         await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
 
 
+async def show_home(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Route user to their role dashboard (Home/Menu)."""
+    if not LEGACY_UI:
+        return
+    user_id = update.effective_user.id
+    # Ensure user present and determine role string
+    ensure_user_in_memory(user_id, storage)
+    role_value = users.get(user_id, {}).get('role', UserRole.NEW_USER)
+    role_str = getattr(role_value, 'value', role_value) if role_value else 'NEW_USER'
+    await setup_persistent_keyboard(update, user_id, role_str)
+
 async def start_payment_capture(update: Update):
     """Start payment capture flow"""
     user_id = update.callback_query.from_user.id
@@ -533,6 +562,24 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     user_id = update.effective_user.id
     text = update.message.text
+    
+    # Minimal persistent navigation mapping
+    if text in ["🏠 Home", "🧭 Menu", "/menu", "/start"]:
+        await show_home(update, context)
+        return
+    if text == "❓ Help":
+        # Prefer waiter help if role is waiter; otherwise route to home
+        role_val = users.get(user_id, {}).get('role')
+        if role_val == UserRole.WAITER:
+            # Fall back to a simple help message in text context
+            await update.message.reply_text(
+                "❓ Waiter Help\n\nUse ‘📸 Capture Payment’, then upload a clear receipt.",
+                parse_mode='Markdown'
+            )
+        else:
+            await show_home(update, context)
+        return
+    
     state_name = user_states.get(user_id, UserState.IDLE)
     
     if state_name == UserState.WAITING_FOR_RESTAURANT_NAME:
@@ -774,65 +821,6 @@ async def notify_super_admin_restaurant_registration(user_id: int, restaurant_da
     except Exception as e:
         logger.error(f"Error notifying Super Admin: {e}")
 
-
-async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle PDF document uploads for reconciliation"""
-    user_id = update.effective_user.id
-    
-    # Only restaurant admins can upload statements
-    if not LEGACY_UI or user_id not in users or users[user_id].role != UserRole.RESTAURANT_ADMIN:
-        await update.message.reply_text("❌ Only restaurant admins can upload bank statements.")
-        return
-    
-    document = update.message.document
-    
-    # Check if it's a PDF
-    if not document.mime_type == 'application/pdf':
-        await update.message.reply_text("❌ Please upload a PDF file.")
-        return
-    
-    try:
-        # Download the PDF
-        file = await context.bot.get_file(document.file_id)
-        pdf_bytes = await file.download_as_bytearray()
-        
-        # Extract text from PDF
-        pdf_reader = PyPDF2.PdfReader(io.BytesIO(pdf_bytes))
-        pdf_text = ""
-        for page in pdf_reader.pages:
-            pdf_text += page.extract_text()
-        
-        # Extract references from PDF
-        bank_refs = reconciler.parser.extract_references(pdf_text)
-        
-        if not bank_refs:
-            await update.message.reply_text("❌ No transaction references found in the PDF. Please check the format.")
-            return
-        
-        # Get waiter transaction references from database
-        restaurant = storage.get_restaurant_by_owner(user_id)
-        if not restaurant:
-            await update.message.reply_text("❌ Restaurant not found.")
-            return
-        
-        waiter_transactions = storage.list_transactions_by_restaurant(restaurant['id'], limit=1000)
-        waiter_refs = set()
-        for tx in waiter_transactions:
-            if tx.get('original_ref') and tx['original_ref'] != 'Unknown':
-                waiter_refs.add(tx['original_ref'])
-        
-        # Perform reconciliation
-        result = reconciler.reconcile(bank_refs, waiter_refs)
-        
-        # Format and send result
-        result_text = reconciler.format_result(result)
-        await update.message.reply_text(result_text)
-        
-        logger.info(f"Reconciliation completed for restaurant {restaurant['id']}: {result.matched_count} matched, {result.missing_count} missing, {result.extra_count} extra")
-        
-    except Exception as e:
-        logger.error(f"Error processing PDF for user {user_id}: {e}", exc_info=True)
-        await update.message.reply_text(f"❌ Error processing PDF: {e}")
 async def handle_super_admin_action(update: Update, action: str):
     """Handle Super Admin actions
     PRD:M1.4 Restaurant approval by Super Admin; Rules: role separation
@@ -1220,11 +1208,10 @@ async def handle_restaurant_admin_action(update: Update, action: str):
         await show_restaurant_transactions(update)
     elif action == "restaurant_settings":
         await show_restaurant_settings(update)
-    elif action == "restaurant_reconciliation":
-        await show_restaurant_reconciliation(update)
     elif action == "restaurant_upload_statement":
-        await show_upload_statement_instructions(update)
-        await show_restaurant_reconciliation(update)
+        await handle_upload_statement(update)
+    elif action == "restaurant_reconciliation":
+        await handle_reconciliation(update)
     else:
         await update.callback_query.edit_message_text("🏪 Restaurant Admin feature coming soon...")
 
@@ -1269,35 +1256,6 @@ async def show_restaurant_settings(update: Update):
 
 async def show_restaurant_reconciliation(update: Update):
     """Show restaurant reconciliation (placeholder)"""
-
-async def show_upload_statement_instructions(update: Update):
-    """Show instructions for uploading bank statement"""
-    user_id = update.effective_user.id
-    
-    instructions = """📄 **Upload Bank Statement** 📄
-
-To reconcile your transactions:
-
-1️⃣ **Upload your weekly bank statement PDF**
-2️⃣ **The bot will extract transaction references**
-3️⃣ **Compare with waiter transactions**
-4️⃣ **Show reconciliation results**
-
-**Supported formats:**
-• PDF bank statements
-• Transaction reference numbers
-• Ethiopian bank formats (CBE, Dashen, Abyssinia, Telebirr)
-
-**Just upload your PDF now!** 📎"""
-    
-    keyboard = [[InlineKeyboardButton("🔙 Back to Restaurant Menu", callback_data="back_to_restaurant_admin")]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await update.callback_query.edit_message_text(
-        text=instructions,
-        reply_markup=reply_markup,
-        parse_mode=Markdown
-    )
     user_id = update.callback_query.from_user.id
     
     text = "🔄 **Make Reconciliation**\n\n"
@@ -1322,7 +1280,9 @@ def create_application(token: str):
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_handler(MessageHandler(filters.PHOTO & ~filters.COMMAND, handle_photo))
-    app.add_handler(MessageHandler(filters.Document.PDF, handle_document))    
+    app.add_handler(CommandHandler("menu", show_home))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
+    app.add_handler(MessageHandler(filters.Document.PDF, handle_document_upload))    
     if LEGACY_UI:
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
 
@@ -1335,50 +1295,13 @@ if __name__ == "__main__":
         raise ValueError("BOT_TOKEN environment variable is required")
     app = create_application(token)
     print("Bot is running! Press Ctrl+C to stop.")
-    app.run_polling()
-
-# Webhook support for Render
-if __name__ == "__main__":
-    import asyncio
-    from aiohttp import web
-    
-    logging.basicConfig(level=logging.INFO)
-    token = os.environ.get("BOT_TOKEN")
-    if not token:
-        raise ValueError("BOT_TOKEN environment variable is required")
-    
-    app = create_application(token)
-    
-    # Check if we should use webhook (for Render deployment)
     use_webhook = os.environ.get("USE_WEBHOOK", "0") == "1"
-    
     if use_webhook:
-        # Webhook mode for Render
         public_url = os.environ.get("PUBLIC_URL")
-        port = int(os.environ.get("PORT", 10000))
         webhook_path = os.environ.get("WEBHOOK_PATH", "/webhook")
-        
+        port = int(os.environ.get("PORT", "10000"))
         if not public_url:
-            raise ValueError("PUBLIC_URL environment variable is required for webhook mode")
-        
-        # Set webhook
-        webhook_url = f"{public_url}{webhook_path}"
-        print(f"Setting webhook to: {webhook_url}")
-        
-        async def webhook_handler(request):
-            data = await request.json()
-            update = Update.de_json(data, app.bot)
-            await app.process_update(update)
-            return web.Response()
-        
-        # Create web server
-        web_app = web.Application()
-        web_app.router.add_post(webhook_path, webhook_handler)
-        
-        # Start web server
-        print(f"Starting webhook server on port {port}")
-        web.run_app(web_app, port=port, host='0.0.0.0')
+            raise ValueError("PUBLIC_URL must be set when USE_WEBHOOK=1")
+        app.run_webhook(listen="0.0.0.0", port=port, url_path=webhook_path, webhook_url=f"{public_url}{webhook_path}")
     else:
-        # Polling mode for local development
-        print("Bot is running in polling mode! Press Ctrl+C to stop.")
         app.run_polling()
