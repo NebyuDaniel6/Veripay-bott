@@ -44,6 +44,24 @@ logger = logging.getLogger(__name__)
 
 class VisionOCR:
     def __init__(self):
+        # Method 1: Try JSON from environment variable first (most reliable)
+        creds_json = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS_JSON')
+        if creds_json:
+            try:
+                # Clean up the JSON string
+                creds_json = creds_json.strip()
+                # Remove all line breaks and extra whitespace to make it single-line
+                creds_json = "".join(creds_json.split())
+                # Add back necessary spaces after colons and commas
+                creds_json = creds_json.replace(":",": ").replace(",",", ")
+                creds_dict = json.loads(creds_json)
+                credentials = service_account.Credentials.from_service_account_info(creds_dict)
+                self.client = vision.ImageAnnotatorClient(credentials=credentials)
+                logger.info("✅ Vision initialized from JSON environment variable")
+                return
+            except Exception as e:
+                logger.warning(f"❌ Failed to load credentials from JSON: {e}")
+        # Fallback to existing methods
         print("DEBUG: Starting VisionOCR initialization")
         # Method 1: Try individual environment variables first
         project_id = os.environ.get('GOOGLE_PROJECT_ID')
