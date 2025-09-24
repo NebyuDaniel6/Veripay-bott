@@ -65,7 +65,7 @@ class VisionOCR:
         client_email = os.environ.get('GOOGLE_CLIENT_EMAIL')
         
         if all([project_id, private_key, client_email]):
-            print("�� Trying individual environment variables...")
+            print("🔍 Trying individual environment variables...")
             try:
                 private_key = private_key.replace('\\n', '\n')
                 creds_info = {
@@ -221,18 +221,40 @@ class VisionOCR:
                 result["time"] = match.group(1)
                 break
         
-        # Extract reference number
-        ref_patterns = [
-            r'ref[:\s]*(\w+)',
-            r'reference[:\s]*(\w+)',
-            r'txn[:\s]*(\w+)',
-            r'transaction[:\s]*(\w+)',
-        ]
-        
-        for pattern in ref_patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                result["reference"] = match.group(1)
-                break
+        # Extract reference number with improved Telebirr patterns
+        if "telebirr" in text_lower:
+            # Telebirr specific patterns - more comprehensive
+            telebirr_patterns = [
+                r'transaction\s*id[:\s]*(\w+)',
+                r'txn\s*id[:\s]*(\w+)',
+                r'transaction\s*no[:\s]*(\w+)',
+                r'txn\s*no[:\s]*(\w+)',
+                r'reference\s*no[:\s]*(\w+)',
+                r'ref\s*no[:\s]*(\w+)',
+                r'transaction[:\s]*(\d{10,})',
+                r'txn[:\s]*(\d{10,})',
+                r'(\d{12,})',  # Long numeric IDs
+                r'id[:\s]*(\d{10,})',  # Generic ID pattern
+                r'no[:\s]*(\d{10,})',  # Generic number pattern
+            ]
+            for pattern in telebirr_patterns:
+                match = re.search(pattern, text, re.IGNORECASE)
+                if match:
+                    result["reference"] = match.group(1)
+                    print(f"DEBUG: Telebirr reference found: {match.group(1)}")
+                    break
+        else:
+            # Generic patterns for other banks
+            ref_patterns = [
+                r'ref[:\s]*(\w+)',
+                r'reference[:\s]*(\w+)',
+                r'txn[:\s]*(\w+)',
+                r'transaction[:\s]*(\w+)',
+            ]
+            for pattern in ref_patterns:
+                match = re.search(pattern, text, re.IGNORECASE)
+                if match:
+                    result["reference"] = match.group(1)
+                    break
         
         return result
