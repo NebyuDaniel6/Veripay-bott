@@ -1291,11 +1291,18 @@ def create_application(token: str):
 if __name__ == "__main__":
     # Debug environment variables
     print("=== ENVIRONMENT VARIABLES DEBUG ===")
-    print(f"USE_WEBHOOK: {repr(os.environ.get("USE_WEBHOOK", "NOT_SET"))}")
-    print(f"PUBLIC_URL: {repr(os.environ.get("PUBLIC_URL", "NOT_SET"))}")
-    print(f"PORT: {repr(os.environ.get("PORT", "NOT_SET"))}")
-    print(f"WEBHOOK_PATH: {repr(os.environ.get("WEBHOOK_PATH", "NOT_SET"))}")
-    print(f"BOT_TOKEN: {repr(os.environ.get("BOT_TOKEN", "NOT_SET")[:10] + "..." if os.environ.get("BOT_TOKEN") else "NOT_SET")}")
+    use_webhook_val = os.environ.get("USE_WEBHOOK", "NOT_SET")
+    public_url_val = os.environ.get("PUBLIC_URL", "NOT_SET")
+    port_val = os.environ.get("PORT", "NOT_SET")
+    webhook_path_val = os.environ.get("WEBHOOK_PATH", "NOT_SET")
+    bot_token_val = os.environ.get("BOT_TOKEN", "NOT_SET")
+    if bot_token_val != "NOT_SET":
+        bot_token_val = bot_token_val[:10] + "..."
+    print(f"USE_WEBHOOK: {repr(use_webhook_val)}")
+    print(f"PUBLIC_URL: {repr(public_url_val)}")
+    print(f"PORT: {repr(port_val)}")
+    print(f"WEBHOOK_PATH: {repr(webhook_path_val)}")
+    print(f"BOT_TOKEN: {repr(bot_token_val)}")
     print("=== END DEBUG ===")
     logging.basicConfig(level=logging.INFO)
     token = os.environ.get("BOT_TOKEN")
