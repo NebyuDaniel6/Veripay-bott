@@ -44,6 +44,33 @@ logger = logging.getLogger(__name__)
 
 class VisionOCR:
     def __init__(self):
+        # Method 1: Create credentials file from environment variable JSON
+        creds_json = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS_JSON')
+        if creds_json:
+            try:
+                import tempfile
+                # Clean up the JSON string
+                creds_json = creds_json.strip()
+                # Remove all line breaks and extra whitespace to make it single-line
+                creds_json = "".join(creds_json.split())
+                # Add back necessary spaces after colons and commas
+                creds_json = creds_json.replace(":",": ").replace(",",", ")
+                # Parse JSON to validate it
+                creds_dict = json.loads(creds_json)
+                # Write to temporary file
+                with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as temp_file:
+                    json.dump(creds_dict, temp_file)
+                    temp_creds_path = temp_file.name
+                # Load credentials from temporary file
+                credentials = service_account.Credentials.from_service_account_file(temp_creds_path)
+                self.client = vision.ImageAnnotatorClient(credentials=credentials)
+                # Clean up
+                os.unlink(temp_creds_path)
+                logger.info("✅ Vision initialized from JSON environment variable via temp file")
+                return
+            except Exception as e:
+                logger.warning(f"❌ Failed to load credentials from JSON: {e}")
+        # Fallback to existing methods
         # Method 1: Try JSON from environment variable first (most reliable)
         creds_json = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS_JSON')
         if creds_json:
