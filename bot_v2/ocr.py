@@ -22,12 +22,19 @@ class VisionOCR:
             return
             
         print(f"✅ Found credentials JSON (length: {len(creds_json)})")
+        print(f"First 100 chars: {repr(creds_json[:100])}")
+        print(f"Last 100 chars: {repr(creds_json[-100:])}")
         
         try:
+            # Try to parse the JSON first to validate it
+            print("🔍 Attempting to parse JSON...")
+            creds_dict = json.loads(creds_json)
+            print("✅ JSON parsed successfully!")
+            
             # Create a temporary file with the credentials
             with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_file:
-                # Write the JSON directly to the file
-                temp_file.write(creds_json)
+                # Write the parsed JSON back to ensure proper formatting
+                json.dump(creds_dict, temp_file, indent=2)
                 temp_file_path = temp_file.name
                 
             print(f"✅ Created temporary credentials file: {temp_file_path}")
@@ -45,12 +52,16 @@ class VisionOCR:
             
         except json.JSONDecodeError as e:
             print(f"❌ JSON parsing error: {e}")
+            print(f"Error position: {e.pos}")
+            if e.pos < len(creds_json):
+                print(f"Character at error: {repr(creds_json[e.pos:e.pos+20])}")
             logger.warning(f"Vision unavailable: Invalid JSON format - {e}")
             logger.info("Bot will continue without OCR functionality")
             self.client = None
             
         except Exception as e:
             print(f"❌ Credentials error: {e}")
+            print(f"Error type: {type(e).__name__}")
             logger.warning(f"Vision unavailable: {e}")
             logger.info("Bot will continue without OCR functionality")
             self.client = None
