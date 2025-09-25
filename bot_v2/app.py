@@ -88,8 +88,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Simple UI mode
         state.set_role(user_id, "waiter" if str(user_id) != os.environ.get("SUPER_ADMIN_ID", "") else "super_admin")
         buttons = [[InlineKeyboardButton("📸 Capture Payment", callback_data="capture_payment")]]
-        if update.message:
-            await update.message.reply_text("Welcome to VeriPay. Use menu buttons.", reply_markup=InlineKeyboardMarkup(buttons))
+        try:
+            if update.message:
+                await update.message.reply_text("Welcome to VeriPay. Use menu buttons.", reply_markup=InlineKeyboardMarkup(buttons))
+            else:
+                await update.effective_chat.send_message("Welcome to VeriPay. Use menu buttons.", reply_markup=InlineKeyboardMarkup(buttons))
+        except Exception:
+            # Fallback to chat send if any reply error
+            await update.effective_chat.send_message("Welcome to VeriPay. Use menu buttons.", reply_markup=InlineKeyboardMarkup(buttons))
         return
     
     # Legacy UI mode
