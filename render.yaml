@@ -4,7 +4,7 @@ services:
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: python bot_v2/app_simple.py
+    startCommand: python bot_v2/app_webhook.py
     envVars:
       - key: BOT_TOKEN
         sync: false
