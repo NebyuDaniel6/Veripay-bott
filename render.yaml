@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: veripay-bot
+    name: veripay-bot-v2
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
