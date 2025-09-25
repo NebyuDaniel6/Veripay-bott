@@ -5,15 +5,15 @@ from typing import Tuple, Dict
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram import ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
-from state import StateStore
-from storage import Storage
-from ocr import VisionOCR
+from bot_v2.state import StateStore
+from bot_v2.storage import Storage
+from bot_v2.ocr import VisionOCR
 
 # Import legacy UI if enabled
-from m2_handler import handle_upload_statement, handle_document_upload, handle_reconciliation
+from bot_v2.m2_handler import handle_upload_statement, handle_document_upload, handle_reconciliation
 LEGACY_UI = os.environ.get("LEGACY_UI", "0") == "1"
 if LEGACY_UI:
-    from ui_legacy import (
+    from bot_v2.ui_legacy import (
         LANGUAGES, UserRole, UserState, BANK_BUTTONS,
         get_text, build_language_selection_keyboard, build_main_menu_keyboard,
         build_super_admin_menu_keyboard, build_restaurant_admin_menu_keyboard,

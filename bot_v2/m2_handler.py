@@ -1,7 +1,7 @@
 """M2 Reconciliation Handler - Completely separate from M1"""
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from reconciliation import reconciler
+from bot_v2.reconciliation import reconciler
 import PyPDF2
 import io
 
