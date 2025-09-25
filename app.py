@@ -1,8 +1,4 @@
-print("Starting VeriPay Bot...")
 import os
-print(f"PORT: {os.environ.get('PORT', 'NOT_SET')}")
-print(f"BOT_TOKEN: {'SET' if os.environ.get('BOT_TOKEN') else 'NOT_SET'}")
-
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import json
 
@@ -21,8 +17,6 @@ class Handler(BaseHTTPRequestHandler):
         response = {"status": "POST received", "path": self.path}
         self.wfile.write(json.dumps(response).encode())
 
-port = int(os.environ.get("PORT", 10000))
-print(f"Starting server on port {port}")
+port = int(os.environ.get("PORT", 8080))
 server = HTTPServer(('0.0.0.0', port), Handler)
-print("Server started successfully!")
 server.serve_forever()
