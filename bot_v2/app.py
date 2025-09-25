@@ -8,7 +8,6 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, Cal
 from state import StateStore
 from storage import Storage
 from ocr import VisionOCR
-from export_functions import export_transactions_csv, export_analytics_report
 
 # Import legacy UI if enabled
 from m2_handler import handle_upload_statement, handle_document_upload, handle_reconciliation
@@ -1283,9 +1282,7 @@ def create_application(token: str):
     app.add_handler(MessageHandler(filters.PHOTO & ~filters.COMMAND, handle_photo))
     app.add_handler(CommandHandler("menu", show_home))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
-    app.add_handler(MessageHandler(filters.Document.PDF, handle_document_upload))
-    app.add_handler(CommandHandler("export_csv", lambda update, context: export_transactions_csv(update, context, storage)))
-    app.add_handler(CommandHandler("export_analytics", lambda update, context: export_analytics_report(update, context, storage)))    
+    app.add_handler(MessageHandler(filters.Document.PDF, handle_document_upload))    
     if LEGACY_UI:
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
 
