@@ -8,6 +8,10 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, Cal
 from state import StateStore
 from storage import Storage
 from ocr import VisionOCR
+import re
+import asyncio
+from telegram.error import BadRequest, TimedOut, NetworkError, RetryAfter
+from flask import Flask, jsonify
 
 # Import legacy UI if enabled
 from m2_handler import handle_upload_statement, handle_document_upload, handle_reconciliation
@@ -21,6 +25,88 @@ if LEGACY_UI:
         build_payment_result_keyboard, build_pending_restaurants_keyboard,
         build_back_keyboard
     )
+
+
+# Error handling and safe messaging
+async def safe_send(update, text: str, **kwargs):
+    """Send message safely with fallback for BadRequest errors"""
+    try:
+        if update.message:
+            return await update.message.reply_text(text, **kwargs)
+        else:
+            return await update.effective_chat.send_message(text, **kwargs)
+    except BadRequest as e:
+        # Fallback: remove parse_mode and truncate if too long
+        fallback_kwargs = {k: v for k, v in kwargs.items() if k != 'parse_mode'}
+        fallback_text = text[:4000] + '...' if len(text) > 4000 else text
+        # Remove problematic characters that cause Markdown issues
+        fallback_text = re.sub(r'[_*\[\]()~`>#+=|{}.!-]', '', fallback_text)
+        try:
+            if update.message:
+                return await update.message.reply_text(fallback_text, **fallback_kwargs)
+            else:
+                return await update.effective_chat.send_message(fallback_text, **fallback_kwargs)
+        except Exception as fallback_error:
+            print(f'FATAL: Could not send message even with fallback: {fallback_error}')
+            return None
+    except Exception as e:
+        print(f'ERROR in safe_send: {e}')
+        return None
+
+async def safe_edit(update, text: str, **kwargs):
+    """Edit message safely with fallback for BadRequest errors"""
+    try:
+        return await update.callback_query.edit_message_text(text, **kwargs)
+    except BadRequest as e:
+        # Fallback: remove parse_mode and truncate if too long
+        fallback_kwargs = {k: v for k, v in kwargs.items() if k != 'parse_mode'}
+        fallback_text = text[:4000] + '...' if len(text) > 4000 else text
+        # Remove problematic characters that cause Markdown issues
+        fallback_text = re.sub(r'[_*\[\]()~`>#+=|{}.!-]', '', fallback_text)
+        try:
+            return await update.callback_query.edit_message_text(fallback_text, **fallback_kwargs)
+        except Exception as fallback_error:
+            print(f'FATAL: Could not edit message even with fallback: {fallback_error}')
+            return None
+    except Exception as e:
+        print(f'ERROR in safe_edit: {e}')
+        return None
+
+# Global error handler
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Global error handler that prevents the bot from stopping"""
+    logger = logging.getLogger(__name__)
+    logger.error(f'Exception while handling an update: {context.error}', exc_info=context.error)
+    
+    # Don't stop the bot - just log and continue
+    if update and hasattr(update, 'effective_user'):
+        try:
+            await safe_send(update, 'Sorry, something went wrong. Please try again.')
+        except:
+            pass  # Even error recovery failed, but don't stop the bot
+
+# Health check endpoint for monitoring  
+app_flask = Flask(__name__)
+
+@app_flask.route('/health', methods=['GET'])
+
+# Health check command handler
+async def health_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Health check command"""
+    await safe_send(update, '🟢 Bot is healthy and running!')
+
+def health_check():
+    try:
+        loop = asyncio.get_event_loop()
+        timestamp = int(loop.time()) if loop.is_running() else 0
+    except:
+        timestamp = 0
+    
+    return jsonify({
+        'status': 'healthy',
+        'bot': 'running', 
+        'timestamp': timestamp
+    })
 
 def ensure_user_in_memory(user_id: int, storage: Storage) -> None:
     """Ensure user is loaded from database into memory"""
@@ -1276,6 +1362,9 @@ async def show_restaurant_reconciliation(update: Update):
     await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 def create_application(token: str):
     app = ApplicationBuilder().token(token).build()
+    
+    # Add global error handler
+    app.add_error_handler(error_handler)
     global storage, ocr
     storage = Storage(os.environ.get("DATABASE_URL", "sqlite:///veripay_dev.db"))
     ocr = VisionOCR()
@@ -1291,6 +1380,15 @@ def create_application(token: str):
     app.add_handler(MessageHandler(filters.Document.PDF, handle_document_upload))    
     if LEGACY_UI:
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
+
+    # Health check command
+
+
+    app.add_handler(CommandHandler("health", health_command))
+
+
+    
+
 
     return app
 
