@@ -1,53 +1,28 @@
+print("Starting VeriPay Bot...")
 import os
-import logging
+print(f"PORT: {os.environ.get('PORT', 'NOT_SET')}")
+print(f"BOT_TOKEN: {'SET' if os.environ.get('BOT_TOKEN') else 'NOT_SET'}")
+
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import json
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-class RequestHandler(BaseHTTPRequestHandler):
+class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path == '/':
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            response = {
-                "status": "VeriPay Bot is running",
-                "version": "1.0",
-                "endpoints": ["/", "/health", "/webhook"]
-            }
-            self.wfile.write(json.dumps(response).encode())
-        elif self.path == '/health':
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            response = {"status": "healthy", "service": "veripay-bot"}
-            self.wfile.write(json.dumps(response).encode())
-        else:
-            self.send_response(404)
-            self.end_headers()
-            self.wfile.write(b'Not Found')
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        response = {"status": "VeriPay Bot is running", "path": self.path}
+        self.wfile.write(json.dumps(response).encode())
     
     def do_POST(self):
-        if self.path == '/webhook':
-            content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length)
-            logger.info(f"Received webhook data: {post_data}")
-            
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            response = {"status": "ok", "message": "Webhook received"}
-            self.wfile.write(json.dumps(response).encode())
-        else:
-            self.send_response(404)
-            self.end_headers()
-            self.wfile.write(b'Not Found')
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        response = {"status": "POST received", "path": self.path}
+        self.wfile.write(json.dumps(response).encode())
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    logger.info(f"Starting HTTP server on port {port}")
-    server = HTTPServer(('0.0.0.0', port), RequestHandler)
-    server.serve_forever()
+port = int(os.environ.get("PORT", 10000))
+print(f"Starting server on port {port}")
+server = HTTPServer(('0.0.0.0', port), Handler)
+print("Server started successfully!")
+server.serve_forever()
