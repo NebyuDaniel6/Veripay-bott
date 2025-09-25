@@ -1,6 +1,6 @@
 services:
-  - type: web
-    name: veripay-bot-v2
+  - type: background
+    name: veripay-bot-bg
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
@@ -8,5 +8,3 @@ services:
     envVars:
       - key: BOT_TOKEN
         sync: false
-      - key: PORT
-        value: 8080
