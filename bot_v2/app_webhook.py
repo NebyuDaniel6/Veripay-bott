@@ -1,33 +1,21 @@
 import os
 import logging
 from flask import Flask, request, jsonify
-from telegram.ext import ApplicationBuilder, CommandHandler
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-
-async def start(update, context):
-    await update.message.reply_text("✅ VeriPay Bot is working!")
-
-async def test(update, context):
-    await update.message.reply_text("🧪 Test endpoint working!")
-
-def create_application(token: str):
-    app = ApplicationBuilder().token(token).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("test", test))
-    return app
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
     try:
         data = request.get_json()
-        logging.info(f"Received webhook data: {data}")
-        return jsonify({"status": "ok"})
+        logger.info(f"Received webhook data: {data}")
+        return jsonify({"status": "ok", "message": "Webhook received"})
     except Exception as e:
-        logging.error(f"Webhook error: {e}")
+        logger.error(f"Webhook error: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/health', methods=['GET'])
@@ -36,8 +24,17 @@ def health():
 
 @app.route('/', methods=['GET'])
 def root():
-    return jsonify({"status": "VeriPay Bot is running", "version": "1.0"})
+    return jsonify({
+        "status": "VeriPay Bot is running", 
+        "version": "1.0",
+        "endpoints": ["/", "/health", "/webhook"]
+    })
+
+@app.route('/test', methods=['GET'])
+def test():
+    return jsonify({"message": "Test endpoint working!"})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
+    logger.info(f"Starting Flask app on port {port}")
     app.run(host="0.0.0.0", port=port, debug=False)
