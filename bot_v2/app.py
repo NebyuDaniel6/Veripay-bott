@@ -331,16 +331,12 @@ async def show_super_admin_menu(update: Update):
     elif update.callback_query:
         try:
             await safe_edit(update, text, reply_markup=keyboard, parse_mode="Markdown")
-        except BadRequest as e:
-            if "Message is not modified" in str(e):
-                await update.callback_query.answer("Already up to date!")
-            else:
-                raise
-        await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
+        except Exception as e:
+            print(f"Error in show_super_admin_menu: {e}")
     # send persistent reply keyboard
     try:
         reply_kb = ReplyKeyboardMarkup([[KeyboardButton("🏠 Home"), KeyboardButton("🧭 Menu"), KeyboardButton("❓ Help")]], resize_keyboard=True, one_time_keyboard=False)
-        await update.effective_chat.send_message(" ", reply_markup=reply_kb)
+        await update.effective_chat.send_message(" ", reply_markup=reply_kb)
     except Exception:
         pass
 
@@ -1274,7 +1270,7 @@ async def show_waiter_transactions(update: Update, page: int = 0):
             text += f"💰 **{tx.get('amount', 'N/A')} ETB**\n"
             text += f"🏦 Bank: {tx.get('bank_name', 'Unknown')}\n"
             text += f"📅 Date: {tx.get('created_at', 'Unknown')}\n"
-            text += f"📄 Receipt: {tx.get('receipt_number', 'N/A')}\n\n"
+            text += f"📄 Ref: {tx.get('original_ref', tx.get('transaction_id', 'N/A'))}\n\n"
     
     nav = []
     if page > 0:
