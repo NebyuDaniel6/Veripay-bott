@@ -31,7 +31,7 @@ def ensure_user_in_memory(user_id: int, storage: Storage) -> None:
             users[user_id] = {
                 'id': user_id,
                 'username': db_user.get('username', 'Unknown'),
-                'role': UserRole(db_user.get('role', 'NEW_USER')),
+                'role': getattr(UserRole, db_user.get('role', 'NEW_USER'), UserRole.NEW_USER),
                 'restaurant_id': None,
                 'waiter_id': None,
                 'created_at': None
@@ -127,7 +127,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # User exists - restore their role and state
         role = db_user.get('role', 'NEW_USER')
         try:
-            user_role = UserRole[role]
+            user_role = getattr(UserRole, role, UserRole.NEW_USER)
         except KeyError:
             user_role = UserRole.NEW_USER
         

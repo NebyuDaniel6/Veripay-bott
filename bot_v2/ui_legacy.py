@@ -78,7 +78,8 @@ LANGUAGES = {
 }
 
 # User roles
-class UserRole:
+from enum import Enum
+class UserRole(Enum):
     NEW_USER = "new_user"
     WAITER = "waiter"
     RESTAURANT_ADMIN = "restaurant_admin"
