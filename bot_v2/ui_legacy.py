@@ -136,16 +136,9 @@ def build_super_admin_menu_keyboard(user_id: int, user_languages: Dict[int, str]
         [InlineKeyboardButton("📊 Active Restaurants", callback_data="super_active_restaurants")],
         [InlineKeyboardButton(get_text(user_id, "daily_reports", user_languages), callback_data="super_daily_reports")],
         [InlineKeyboardButton(get_text(user_id, "statistics", user_languages), callback_data="super_statistics")],
-        [InlineKeyboardButton("📊 Export CSV", callback_data="super_export_csv")],
-        [InlineKeyboardButton("📈 Export Analytics", callback_data="super_export_analytics")],
         [InlineKeyboardButton(get_text(user_id, "settings", user_languages), callback_data="super_settings")],
         [InlineKeyboardButton("🔓 Logout", callback_data="logout")],
-        [InlineKeyboardButton(get_text(user_id, "language", user_languages), callback_data="change_language")],
-        [
-            InlineKeyboardButton("🏠 Home", callback_data="super_active_restaurants"),
-            InlineKeyboardButton("🧭 Menu", callback_data="super_active_restaurants"),
-            InlineKeyboardButton("❓ Help", callback_data="super_settings")
-        ]
+        [InlineKeyboardButton(get_text(user_id, "language", user_languages), callback_data="change_language")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -155,17 +148,8 @@ def build_restaurant_admin_menu_keyboard(user_id: int, user_languages: Dict[int,
         [InlineKeyboardButton(get_text(user_id, "manage_waiters", user_languages), callback_data="restaurant_manage_waiters")],
         [InlineKeyboardButton("📒 Restaurant Transactions", callback_data="restaurant_transactions")],
         [InlineKeyboardButton("⚙️ Settings", callback_data="restaurant_settings")],
-        [InlineKeyboardButton("📄 Upload Statement", callback_data="restaurant_upload_statement")],
         [InlineKeyboardButton("🔄 Make Reconciliation", callback_data="restaurant_reconciliation")],
-        [InlineKeyboardButton("📊 Export CSV", callback_data="restaurant_export_csv")],
-        [InlineKeyboardButton("📈 Export Analytics", callback_data="restaurant_export_analytics")],
-        [InlineKeyboardButton("📄 Download Daily Report", callback_data="download_daily_report")],
-        [InlineKeyboardButton("👥 View Waiters", callback_data="view_restaurant_waiters")],        [InlineKeyboardButton(get_text(user_id, "language", user_languages), callback_data="change_language")],
-        [
-            InlineKeyboardButton("🏠 Home", callback_data="back_to_restaurant_admin"),
-            InlineKeyboardButton("🧭 Menu", callback_data="back_to_restaurant_admin"),
-            InlineKeyboardButton("❓ Help", callback_data="back_to_restaurant_admin")
-        ]
+        [InlineKeyboardButton(get_text(user_id, "language", user_languages), callback_data="change_language")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -175,12 +159,7 @@ def build_waiter_menu_keyboard(user_id: int, user_languages: Dict[int, str]) -> 
         [InlineKeyboardButton(get_text(user_id, "capture_payment", user_languages), callback_data="waiter_capture_payment")],
         [InlineKeyboardButton("📒 My Transactions", callback_data="waiter_transactions")],
         [InlineKeyboardButton(get_text(user_id, "help", user_languages), callback_data="waiter_help")],
-        [InlineKeyboardButton(get_text(user_id, "language", user_languages), callback_data="change_language")],
-        [
-            InlineKeyboardButton("🏠 Home", callback_data="back_to_waiter"),
-            InlineKeyboardButton("🧭 Menu", callback_data="back_to_waiter"),
-            InlineKeyboardButton("❓ Help", callback_data="waiter_help")
-        ]
+        [InlineKeyboardButton(get_text(user_id, "language", user_languages), callback_data="change_language")]
     ]
     return InlineKeyboardMarkup(keyboard)
 

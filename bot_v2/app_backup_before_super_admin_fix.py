@@ -3,15 +3,23 @@ import os
 from io import BytesIO
 from typing import Tuple, Dict
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
-from bot_v2.state import StateStore
-from bot_v2.storage import Storage
-from bot_v2.ocr import VisionOCR
+from state import StateStore
+from storage import Storage
+from ocr import VisionOCR
+import re
+import asyncio
+from telegram.error import BadRequest, TimedOut, NetworkError, RetryAfter
+from flask import Flask, jsonify
+from pdf_generator import PDFGenerator
+from datetime import datetime
 
 # Import legacy UI if enabled
+from m2_handler import handle_upload_statement, handle_document_upload, handle_reconciliation
 LEGACY_UI = os.environ.get("LEGACY_UI", "0") == "1"
 if LEGACY_UI:
-    from bot_v2.ui_legacy import (
+    from ui_legacy import (
         LANGUAGES, UserRole, UserState, BANK_BUTTONS,
         get_text, build_language_selection_keyboard, build_main_menu_keyboard,
         build_super_admin_menu_keyboard, build_restaurant_admin_menu_keyboard,
@@ -19,6 +27,93 @@ if LEGACY_UI:
         build_payment_result_keyboard, build_pending_restaurants_keyboard,
         build_back_keyboard
     )
+
+
+# Error handling and safe messaging
+async def safe_send(update, text: str, **kwargs):
+    """Send message safely with fallback for BadRequest errors"""
+    try:
+        if update.message:
+            return await update.message.reply_text(text, **kwargs)
+        else:
+            return await update.effective_chat.send_message(text, **kwargs)
+    except BadRequest as e:
+        # Fallback: remove parse_mode and truncate if too long
+        fallback_kwargs = {k: v for k, v in kwargs.items() if k != 'parse_mode'}
+        fallback_text = text[:4000] + '...' if len(text) > 4000 else text
+        # Remove problematic characters that cause Markdown issues
+        fallback_text = re.sub(r'[_*\[\]()~`>#+=|{}.!-]', '', fallback_text)
+        try:
+            if update.message:
+                return await update.message.reply_text(fallback_text, **fallback_kwargs)
+            else:
+                return await update.effective_chat.send_message(fallback_text, **fallback_kwargs)
+        except Exception as fallback_error:
+            print(f'FATAL: Could not send message even with fallback: {fallback_error}')
+            return None
+    except Exception as e:
+        print(f'ERROR in safe_send: {e}')
+        return None
+
+async def safe_edit(update, text: str, **kwargs):
+    """Edit message safely with fallback for BadRequest errors"""
+    try:
+        return await update.callback_query.edit_message_text(text, **kwargs)
+    except BadRequest as e:
+        # Fallback: remove parse_mode and truncate if too long
+        fallback_kwargs = {k: v for k, v in kwargs.items() if k != 'parse_mode'}
+        fallback_text = text[:4000] + '...' if len(text) > 4000 else text
+        # Remove problematic characters that cause Markdown issues
+        fallback_text = re.sub(r'[_*\[\]()~`>#+=|{}.!-]', '', fallback_text)
+        try:
+            return await update.callback_query.edit_message_text(fallback_text, **fallback_kwargs)
+        except Exception as fallback_error:
+            print(f'FATAL: Could not edit message even with fallback: {fallback_error}')
+            return None
+    except Exception as e:
+        print(f'ERROR in safe_edit: {e}')
+        return None
+
+# Global error handler
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Global error handler that prevents the bot from stopping"""
+    logger = logging.getLogger(__name__)
+    err = context.error
+    logger.error(f'Exception while handling an update: {err}', exc_info=err)
+    
+    # Ignore transient network/timeouts silently
+    if isinstance(err, (TimedOut, RetryAfter, NetworkError)):
+        return
+
+    # For non-transient errors, gently inform the user
+    if update and hasattr(update, 'effective_user'):
+        try:
+            await safe_send(update, 'Sorry, something went wrong. Please try again.')
+        except:
+            pass  # Do not crash even if notifying fails
+
+# Health check endpoint for monitoring  
+app_flask = Flask(__name__)
+
+@app_flask.route('/health', methods=['GET'])
+
+# Health check command handler
+async def health_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Health check command"""
+    await safe_send(update, '🟢 Bot is healthy and running!')
+
+def health_check():
+    try:
+        loop = asyncio.get_event_loop()
+        timestamp = int(loop.time()) if loop.is_running() else 0
+    except:
+        timestamp = 0
+    
+    return jsonify({
+        'status': 'healthy',
+        'bot': 'running', 
+        'timestamp': timestamp
+    })
 
 def ensure_user_in_memory(user_id: int, storage: Storage) -> None:
     """Ensure user is loaded from database into memory"""
@@ -86,8 +181,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Simple UI mode
         state.set_role(user_id, "waiter" if str(user_id) != os.environ.get("SUPER_ADMIN_ID", "") else "super_admin")
         buttons = [[InlineKeyboardButton("📸 Capture Payment", callback_data="capture_payment")]]
-        if update.message:
-            await update.message.reply_text("Welcome to VeriPay. Use menu buttons.", reply_markup=InlineKeyboardMarkup(buttons))
+        try:
+            if update.message:
+                await update.message.reply_text("Welcome to VeriPay. Use menu buttons.", reply_markup=InlineKeyboardMarkup(buttons))
+            else:
+                await update.effective_chat.send_message("Welcome to VeriPay. Use menu buttons.", reply_markup=InlineKeyboardMarkup(buttons))
+        except Exception:
+            # Fallback to chat send if any reply error
+            await update.effective_chat.send_message("Welcome to VeriPay. Use menu buttons.", reply_markup=InlineKeyboardMarkup(buttons))
         return
     
     # Legacy UI mode
@@ -124,7 +225,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # User exists - restore their role and state
         role = db_user.get('role', 'NEW_USER')
         try:
-            user_role = UserRole[role]
+            user_role = getattr(UserRole, role, UserRole.NEW_USER)
         except KeyError:
             user_role = UserRole.NEW_USER
         
@@ -192,6 +293,13 @@ async def show_language_selection(update: Update):
     if update.message:
         await update.message.reply_text(text, reply_markup=keyboard, parse_mode='Markdown')
     elif update.callback_query:
+        try:
+            await safe_edit(update, text, reply_markup=keyboard, parse_mode="Markdown")
+        except BadRequest as e:
+            if "Message is not modified" in str(e):
+                await update.callback_query.answer("Already up to date!")
+            else:
+                raise
         await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
 
 async def show_main_menu(update: Update):
@@ -203,6 +311,13 @@ async def show_main_menu(update: Update):
     if update.message:
         await update.message.reply_text(text, reply_markup=keyboard, parse_mode='Markdown')
     elif update.callback_query:
+        try:
+            await safe_edit(update, text, reply_markup=keyboard, parse_mode="Markdown")
+        except BadRequest as e:
+            if "Message is not modified" in str(e):
+                await update.callback_query.answer("Already up to date!")
+            else:
+                raise
         await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
 
 async def show_super_admin_menu(update: Update):
@@ -214,7 +329,16 @@ async def show_super_admin_menu(update: Update):
     if update.message:
         await update.message.reply_text(text, reply_markup=keyboard, parse_mode='Markdown')
     elif update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
+        try:
+            await safe_edit(update, text, reply_markup=keyboard, parse_mode="Markdown")
+        except Exception as e:
+            print(f"Error in show_super_admin_menu: {e}")
+    # send persistent reply keyboard
+    try:
+        reply_kb = ReplyKeyboardMarkup([[KeyboardButton("🏠 Home"), KeyboardButton("🧭 Menu"), KeyboardButton("❓ Help")]], resize_keyboard=True, one_time_keyboard=False)
+        await update.effective_chat.send_message(" ", reply_markup=reply_kb)
+    except Exception:
+        pass
 
 async def show_restaurant_admin_menu(update: Update):
     """Show Restaurant Admin menu"""
@@ -225,7 +349,19 @@ async def show_restaurant_admin_menu(update: Update):
     if update.message:
         await update.message.reply_text(text, reply_markup=keyboard, parse_mode='Markdown')
     elif update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
+        try:
+            await safe_edit(update, text, reply_markup=keyboard, parse_mode="Markdown")
+        except BadRequest as e:
+            if "Message is not modified" in str(e):
+                await update.callback_query.answer("Already up to date!")
+            else:
+                raise
+    # send persistent reply keyboard
+    try:
+        reply_kb = ReplyKeyboardMarkup([[KeyboardButton("🏠 Home"), KeyboardButton("🧭 Menu"), KeyboardButton("❓ Help")]], resize_keyboard=True, one_time_keyboard=False)
+        await update.effective_chat.send_message(" ", reply_markup=reply_kb)
+    except Exception:
+        pass
 
 async def show_waiter_menu(update: Update):
     """Show Waiter menu"""
@@ -236,7 +372,20 @@ async def show_waiter_menu(update: Update):
     if update.message:
         await update.message.reply_text(text, reply_markup=keyboard, parse_mode='Markdown')
     elif update.callback_query:
+        try:
+            await safe_edit(update, text, reply_markup=keyboard, parse_mode="Markdown")
+        except BadRequest as e:
+            if "Message is not modified" in str(e):
+                await update.callback_query.answer("Already up to date!")
+            else:
+                raise
         await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
+    # send persistent reply keyboard
+    try:
+        reply_kb = ReplyKeyboardMarkup([[KeyboardButton("🏠 Home"), KeyboardButton("🧭 Menu"), KeyboardButton("❓ Help")]], resize_keyboard=True, one_time_keyboard=False)
+        await update.effective_chat.send_message(" ", reply_markup=reply_kb)
+    except Exception:
+        pass
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Callback dispatcher
@@ -476,8 +625,26 @@ async def setup_persistent_keyboard(update: Update, user_id: int, role: str):
     if update.message:
         await update.message.reply_text(text, reply_markup=keyboard, parse_mode='Markdown')
     elif update.callback_query:
+        try:
+            await safe_edit(update, text, reply_markup=keyboard, parse_mode="Markdown")
+        except BadRequest as e:
+            if "Message is not modified" in str(e):
+                await update.callback_query.answer("Already up to date!")
+            else:
+                raise
         await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
 
+
+async def show_home(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Route user to their role dashboard (Home/Menu)."""
+    if not LEGACY_UI:
+        return
+    user_id = update.effective_user.id
+    # Ensure user present and determine role string
+    ensure_user_in_memory(user_id, storage)
+    role_value = users.get(user_id, {}).get('role', UserRole.NEW_USER)
+    role_str = getattr(role_value, 'value', role_value) if role_value else 'NEW_USER'
+    await setup_persistent_keyboard(update, user_id, role_str)
 
 async def start_payment_capture(update: Update):
     """Start payment capture flow"""
@@ -531,6 +698,24 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     user_id = update.effective_user.id
     text = update.message.text
+    
+    # Minimal persistent navigation mapping
+    if text in ["🏠 Home", "🧭 Menu", "/menu", "/start"]:
+        await show_home(update, context)
+        return
+    if text == "❓ Help":
+        # Prefer waiter help if role is waiter; otherwise route to home
+        role_val = users.get(user_id, {}).get('role')
+        if role_val == UserRole.WAITER:
+            # Fall back to a simple help message in text context
+            await update.message.reply_text(
+                "❓ Waiter Help\n\nUse ‘📸 Capture Payment’, then upload a clear receipt.",
+                parse_mode='Markdown'
+            )
+        else:
+            await show_home(update, context)
+        return
+    
     state_name = user_states.get(user_id, UserState.IDLE)
     
     if state_name == UserState.WAITING_FOR_RESTAURANT_NAME:
@@ -1040,14 +1225,26 @@ async def handle_waiter_action(update: Update, action: str):
     if action == "waiter_capture_payment":
         await start_payment_capture(update)
     elif action == "waiter_transactions":
-        await show_waiter_transactions(update)
+        await show_waiter_transactions(update, page=0)
+    elif action.startswith("tx_page_"):
+        new_page = int(action.split("_")[-1])
+        await show_waiter_transactions(update, page=new_page)
     elif action == "waiter_help":
         await show_waiter_help(update)
+    elif action.startswith("restaurant_tx_page_"):
+        new_page = int(action.split("_")[-1])
+        await show_restaurant_transactions(update, page=new_page)
+    elif action == "view_restaurant_waiters":
+        await show_restaurant_waiters(update)
+    elif action == "download_daily_report":
+        await handle_download_daily_report(update)
+    elif action == "manage_waiters":
+        await show_pending_waiter_requests(update)
     else:
         await update.callback_query.edit_message_text("👤 Waiter feature coming soon...")
 
-async def show_waiter_transactions(update: Update):
-    """Show waiter transaction history"""
+async def show_waiter_transactions(update: Update, page: int = 0):
+    """Show waiter transaction history with pagination"""
     user_id = update.callback_query.from_user.id
     
     # Get waiter ID for this user
@@ -1056,20 +1253,36 @@ async def show_waiter_transactions(update: Update):
         await update.callback_query.edit_message_text("❌ Waiter profile not found.")
         return
     
+    PAGE_SIZE = 20
+    offset = page * PAGE_SIZE
+
     # Get transactions for this waiter
-    transactions = storage.list_transactions_by_waiter(waiter['id'], limit=20)
+    transactions = storage.list_transactions_by_waiter(waiter['id'], limit=PAGE_SIZE, offset=offset)
+    total_count = storage.count_transactions_by_waiter(waiter['id'])
     
     if not transactions:
         text = "📒 **My Transactions**\n\nNo transactions found yet. Start capturing payments to see your transaction history here."
     else:
-        text = f"📒 **My Transactions**\n\n**Recent Transactions:**\n\n"
-        for tx in transactions[:10]:  # Show last 10
+        text = f"📒 **My Transactions**\n\n"
+        text += f"**Page {page+1} of {(total_count + PAGE_SIZE - 1) // PAGE_SIZE}**\n"
+        text += f"**Total: {total_count} transactions**\n\n"
+        for tx in transactions:
             text += f"💰 **{tx.get('amount', 'N/A')} ETB**\n"
             text += f"🏦 Bank: {tx.get('bank_name', 'Unknown')}\n"
             text += f"📅 Date: {tx.get('created_at', 'Unknown')}\n"
-            text += f"📄 Receipt: {tx.get('receipt_number', 'N/A')}\n\n"
+            text += f"📄 Ref: {tx.get('original_ref', tx.get('transaction_id', 'N/A'))}\n\n"
     
-    keyboard = [[InlineKeyboardButton("🔙 Back to Waiter Menu", callback_data="back_to_waiter")]]
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton("⬅️ Prev", callback_data=f"tx_page_{page-1}"))
+    if len(transactions) == PAGE_SIZE:
+        nav.append(InlineKeyboardButton("➡️ Next", callback_data=f"tx_page_{page+1}"))
+
+    keyboard = []
+    if nav:
+        keyboard.append(nav)
+    keyboard.append([InlineKeyboardButton("🔙 Back to Waiter Menu", callback_data="back_to_waiter")])
+
     await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 
 async def show_waiter_help(update: Update):
@@ -1159,12 +1372,14 @@ async def handle_restaurant_admin_action(update: Update, action: str):
         await show_restaurant_transactions(update)
     elif action == "restaurant_settings":
         await show_restaurant_settings(update)
+    elif action == "restaurant_upload_statement":
+        await handle_upload_statement(update)
     elif action == "restaurant_reconciliation":
-        await show_restaurant_reconciliation(update)
+        await handle_reconciliation(update)
     else:
         await update.callback_query.edit_message_text("🏪 Restaurant Admin feature coming soon...")
 
-async def show_restaurant_transactions(update: Update):
+async def show_restaurant_transactions(update: Update, page: int = 0):
     """Show restaurant transaction history"""
     user_id = update.callback_query.from_user.id
     
@@ -1175,19 +1390,34 @@ async def show_restaurant_transactions(update: Update):
         return
     
     # Get transactions for this restaurant
-    transactions = storage.list_transactions_by_restaurant(restaurant['id'], limit=20)
+    PAGE_SIZE = 20
+    offset = page * PAGE_SIZE
+    transactions = storage.list_transactions_by_restaurant(restaurant['id'], limit=PAGE_SIZE, offset=offset)
+    total_count = storage.count_transactions_by_restaurant(restaurant['id'])
     
     if not transactions:
         text = "📒 **Restaurant Transactions**\n\nNo transactions found for your restaurant yet."
     else:
-        text = f"📒 **Restaurant Transactions**\n\n**Recent Transactions:**\n\n"
-        for tx in transactions[:10]:  # Show last 10
+        text = f"📒 **Restaurant Transactions**\n\n"
+        text += f"**Page {page+1} of {(total_count + PAGE_SIZE - 1) // PAGE_SIZE}**\n"
+        text += f"**Total: {total_count} transactions**\n\n"
+        for tx in transactions:
             text += f"💰 **{tx.get('amount', 'N/A')} ETB**\n"
             text += f"🏦 Bank: {tx.get('bank_name', 'Unknown')}\n"
             text += f"👤 Waiter: {tx.get('waiter_name', 'Unknown')}\n"
             text += f"📅 Date: {tx.get('created_at', 'Unknown')}\n\n"
     
-    keyboard = [[InlineKeyboardButton("🔙 Back to Restaurant Admin", callback_data="back_to_restaurant_admin")]]
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton("⬅️ Prev", callback_data=f"restaurant_tx_page_{page-1}"))
+    if len(transactions) == PAGE_SIZE:
+        nav.append(InlineKeyboardButton("➡️ Next", callback_data=f"restaurant_tx_page_{page+1}"))
+
+    keyboard = []
+    if nav:
+        keyboard.append(nav)
+    keyboard.append([InlineKeyboardButton("👥 View Waiters", callback_data="view_restaurant_waiters")])
+    keyboard.append([InlineKeyboardButton("🔙 Back to Restaurant Admin", callback_data="back_to_restaurant_admin")])
     await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 
 async def show_restaurant_settings(update: Update):
@@ -1200,7 +1430,17 @@ async def show_restaurant_settings(update: Update):
     text += "• Status: Active\n\n"
     text += "Settings management coming soon..."
     
-    keyboard = [[InlineKeyboardButton("🔙 Back to Restaurant Admin", callback_data="back_to_restaurant_admin")]]
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton("⬅️ Prev", callback_data=f"restaurant_tx_page_{page-1}"))
+    if len(transactions) == PAGE_SIZE:
+        nav.append(InlineKeyboardButton("➡️ Next", callback_data=f"restaurant_tx_page_{page+1}"))
+
+    keyboard = []
+    if nav:
+        keyboard.append(nav)
+    keyboard.append([InlineKeyboardButton("👥 View Waiters", callback_data="view_restaurant_waiters")])
+    keyboard.append([InlineKeyboardButton("🔙 Back to Restaurant Admin", callback_data="back_to_restaurant_admin")])
     await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 
 async def show_restaurant_reconciliation(update: Update):
@@ -1215,10 +1455,23 @@ async def show_restaurant_reconciliation(update: Update):
     text += "• Generate reconciliation report\n\n"
     text += "This feature is planned for future releases."
     
-    keyboard = [[InlineKeyboardButton("🔙 Back to Restaurant Admin", callback_data="back_to_restaurant_admin")]]
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton("⬅️ Prev", callback_data=f"restaurant_tx_page_{page-1}"))
+    if len(transactions) == PAGE_SIZE:
+        nav.append(InlineKeyboardButton("➡️ Next", callback_data=f"restaurant_tx_page_{page+1}"))
+
+    keyboard = []
+    if nav:
+        keyboard.append(nav)
+    keyboard.append([InlineKeyboardButton("👥 View Waiters", callback_data="view_restaurant_waiters")])
+    keyboard.append([InlineKeyboardButton("🔙 Back to Restaurant Admin", callback_data="back_to_restaurant_admin")])
     await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 def create_application(token: str):
     app = ApplicationBuilder().token(token).build()
+    
+    # Add global error handler
+    app.add_error_handler(error_handler)
     global storage, ocr
     storage = Storage(os.environ.get("DATABASE_URL", "sqlite:///veripay_dev.db"))
     ocr = VisionOCR()
@@ -1229,17 +1482,151 @@ def create_application(token: str):
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_handler(MessageHandler(filters.PHOTO & ~filters.COMMAND, handle_photo))
-    
+    app.add_handler(CommandHandler("menu", show_home))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
+    app.add_handler(MessageHandler(filters.Document.PDF, handle_document_upload))    
     if LEGACY_UI:
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
 
+    # Health check command
+
+
+    app.add_handler(CommandHandler("health", health_command))
+
+
+    
     return app
 
+
+# ----------------------
+# M1 & M2 Enhancement Functions (Non-Breaking)
+# ----------------------
+
+async def show_restaurant_waiters(update: Update):
+    """Show all waiters for a restaurant - NEW FUNCTION"""
+    user_id = update.callback_query.from_user.id
+    print(f"DEBUG: show_restaurant_waiters called for user {user_id}")    
+    # Get restaurant ID for this admin
+    restaurant = storage.get_restaurant_by_owner(user_id)
+    if not restaurant:
+        await update.callback_query.edit_message_text("❌ Restaurant not found.")
+        return
+    
+    # Get waiters for this restaurant
+    waiters = storage.list_waiters_by_restaurant(restaurant["id"])
+    
+    if not waiters:
+        text = "👥 **Restaurant Waiters**\n\nNo waiters assigned to your restaurant yet."
+    else:
+        text = f"👥 **Restaurant Waiters**\n\n**Total: {len(waiters)} waiters**\n\n"
+        
+        for waiter in waiters:
+            # Get transaction count for this waiter
+            tx_count = storage.count_transactions_by_waiter(waiter["id"])
+            waiter_name = waiter.get("full_name") or waiter.get("username", "Unknown")
+            text += f"👤 **{waiter_name}**\n"
+            waiter_id = waiter.get("telegram_id", "N/A")
+            text += f"📱 ID: {waiter_id}\n"
+            text += f"📊 Transactions: {tx_count}\n\n"
+    
+    keyboard = [
+        [InlineKeyboardButton("🔙 Back to Transactions", callback_data="restaurant_transactions")],
+        [InlineKeyboardButton("🔙 Back to Restaurant Admin", callback_data="back_to_restaurant_admin")]
+    ]
+    
+
+async def handle_download_daily_report(update: Update):
+    """Handle daily report download - NEW FUNCTION"""
+    user_id = update.callback_query.from_user.id
+    print(f"DEBUG: handle_download_daily_report called for user {user_id}")
+    # Get restaurant ID for this admin
+    restaurant = storage.get_restaurant_by_owner(user_id)
+    if not restaurant:
+        await update.callback_query.edit_message_text("❌ Restaurant not found.")
+        return
+    try:
+        # Generate PDF
+        pdf_generator = PDFGenerator(storage)
+        pdf_data = pdf_generator.generate_daily_report(restaurant["id"])
+        
+        # Send PDF
+        filename = f"daily_report_{datetime.now().strftime('%Y%m%d')}.pdf"
+        restaurant_name = restaurant["name"]
+        await update.callback_query.message.reply_document(
+            document=pdf_data,
+            filename=filename,
+            caption=f"📄 Daily Report - {restaurant_name}\nDate: {datetime.now().strftime('%B %d, %Y')}"
+        )
+        # Show success message
+        await update.callback_query.answer("✅ Report generated successfully!")
+        
+    except Exception as e:
+        await update.callback_query.answer(f"❌ Error generating report: {str(e)}")
+
+async def show_pending_waiter_requests(update: Update):
+    """Show pending waiter requests for approval - NEW FUNCTION"""
+    user_id = update.callback_query.from_user.id    # Get restaurant ID for this admin
+    restaurant = storage.get_restaurant_by_owner(user_id)
+    if not restaurant:
+        await update.callback_query.edit_message_text("❌ Restaurant not found.")
+        return
+    
+    # Get pending requests
+    requests = storage.get_pending_waiter_requests(restaurant["id"])
+    
+    if not requests:
+        text = "👥 **Pending Waiter Requests**\n\nNo pending requests at this time."
+    else:
+        text = f"👥 **Pending Waiter Requests**\n\n**Total: {len(requests)} requests**\n\n"
+        
+        for req in requests:
+            req_name = req.get("full_name") or req.get("username", "Unknown")
+            text += f"👤 **{req_name}**\n"
+            req_id = req.get("telegram_id", "N/A")
+            text += f"📱 ID: {req_id}\n"
+            req_restaurant = req.get("restaurant_name", "Unknown")
+            text += f"🏪 Restaurant: {req_restaurant}\n"
+            req_date = req.get("created_at", "Unknown")
+            text += f"📅 Requested: {req_date}\n\n"
+    
+    keyboard = [
+        [InlineKeyboardButton("🔙 Back to Restaurant Admin", callback_data="back_to_restaurant_admin")]
+    ]
+    
+    await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=Markdown)
+
 if __name__ == "__main__":
+    # Debug environment variables
+    print("=== ENVIRONMENT VARIABLES DEBUG ===")
+    use_webhook_val = os.environ.get("USE_WEBHOOK", "NOT_SET")
+    public_url_val = os.environ.get("PUBLIC_URL", "NOT_SET")
+    port_val = os.environ.get("PORT", "NOT_SET")
+    webhook_path_val = os.environ.get("WEBHOOK_PATH", "NOT_SET")
+    bot_token_val = os.environ.get("BOT_TOKEN", "NOT_SET")
+    if bot_token_val != "NOT_SET":
+        bot_token_val = bot_token_val[:10] + "..."
+    print(f"USE_WEBHOOK: {repr(use_webhook_val)}")
+    print(f"PUBLIC_URL: {repr(public_url_val)}")
+    print(f"PORT: {repr(port_val)}")
+    print(f"WEBHOOK_PATH: {repr(webhook_path_val)}")
+    print(f"BOT_TOKEN: {repr(bot_token_val)}")
+    print("=== END DEBUG ===")
     logging.basicConfig(level=logging.INFO)
     token = os.environ.get("BOT_TOKEN")
     if not token:
         raise ValueError("BOT_TOKEN environment variable is required")
     app = create_application(token)
     print("Bot is running! Press Ctrl+C to stop.")
-    app.run_polling()
+    use_webhook = os.environ.get("USE_WEBHOOK", "0") == "1"
+    print(f"use_webhook evaluated to: {use_webhook}")
+    if use_webhook:
+        public_url = os.environ.get("PUBLIC_URL")
+        webhook_path = os.environ.get("WEBHOOK_PATH", "/webhook")
+        port = int(os.environ.get("PORT", "10000"))
+        if not public_url:
+            raise ValueError("PUBLIC_URL must be set when USE_WEBHOOK=1")
+        print(f"Starting webhook mode on port {port} with URL {public_url}{webhook_path}")
+        app.run_webhook(listen="0.0.0.0", port=port, url_path=webhook_path, webhook_url=f"{public_url}{webhook_path}")
+    else:
+        print("Starting polling mode")
+        app.run_polling()

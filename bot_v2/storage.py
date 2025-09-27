@@ -187,29 +187,13 @@ class Storage:
             """
         )
         self.conn.commit()
-        # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
-            """
-            CREATE TABLE IF NOT EXISTS waiter_requests (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                restaurant_name TEXT NOT NULL,
-                restaurant_id TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-            );
-            """
-        )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
 
     # ----------------------
     # Users
     # ----------------------
     def upsert_user(self, telegram_id: int, username: Optional[str], full_name: Optional[str], role: str = 'NEW_USER', language: str = 'en', phone: Optional[str] = None) -> Dict[str, Any]:
         cur = self.conn.cursor()
-        c.execute(
+        cur.execute(
             """
             INSERT INTO users (telegram_id, username, full_name, role, language, phone)
             VALUES (?, ?, ?, ?, ?, ?)
@@ -225,71 +209,23 @@ class Storage:
             (telegram_id, username, full_name, role, language, phone),
         )
         self.conn.commit()
-        # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
-            """
-            CREATE TABLE IF NOT EXISTS waiter_requests (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                restaurant_name TEXT NOT NULL,
-                restaurant_id TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-            );
-            """
-        )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
         return self.get_user_by_telegram(telegram_id) or {}
 
     def get_user_by_telegram(self, telegram_id: int) -> Optional[Dict[str, Any]]:
         cur = self.conn.cursor()
-        c.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
+        cur.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
         row = cur.fetchone()
         return dict(row) if row else None
 
     def set_user_language(self, telegram_id: int, language: str) -> None:
         cur = self.conn.cursor()
-        c.execute("UPDATE users SET language = ?, updated_at=CURRENT_TIMESTAMP WHERE telegram_id = ?", (language, telegram_id))
+        cur.execute("UPDATE users SET language = ?, updated_at=CURRENT_TIMESTAMP WHERE telegram_id = ?", (language, telegram_id))
         self.conn.commit()
-        # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
-            """
-            CREATE TABLE IF NOT EXISTS waiter_requests (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                restaurant_name TEXT NOT NULL,
-                restaurant_id TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-            );
-            """
-        )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
 
     def set_user_role(self, telegram_id: int, role: str) -> None:
         cur = self.conn.cursor()
-        c.execute("UPDATE users SET role = ?, updated_at=CURRENT_TIMESTAMP WHERE telegram_id = ?", (role, telegram_id))
+        cur.execute("UPDATE users SET role = ?, updated_at=CURRENT_TIMESTAMP WHERE telegram_id = ?", (role, telegram_id))
         self.conn.commit()
-        # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
-            """
-            CREATE TABLE IF NOT EXISTS waiter_requests (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                restaurant_name TEXT NOT NULL,
-                restaurant_id TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-            );
-            """
-        )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
 
     # ----------------------
     # Restaurants
@@ -299,30 +235,14 @@ class Storage:
         if not user:
             raise ValueError("Owner user not found")
         cur = self.conn.cursor()
-        c.execute("INSERT INTO restaurants (owner_user_id, name, phone) VALUES (?, ?, ?)", (user["id"], name, phone))
+        cur.execute("INSERT INTO restaurants (owner_user_id, name, phone) VALUES (?, ?, ?)", (user["id"], name, phone))
         self.conn.commit()
-        # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
-            """
-            CREATE TABLE IF NOT EXISTS waiter_requests (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                restaurant_name TEXT NOT NULL,
-                restaurant_id TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-            );
-            """
-        )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
         rid = cur.lastrowid
         return self.get_restaurant_by_id(rid) or {}
 
     def get_restaurant_by_id(self, restaurant_id: int) -> Optional[Dict[str, Any]]:
         cur = self.conn.cursor()
-        c.execute("SELECT * FROM restaurants WHERE id = ?", (restaurant_id,))
+        cur.execute("SELECT * FROM restaurants WHERE id = ?", (restaurant_id,))
         row = cur.fetchone()
         return dict(row) if row else None
 
@@ -331,7 +251,7 @@ class Storage:
         if not user:
             return None
         cur = self.conn.cursor()
-        c.execute("SELECT * FROM restaurants WHERE owner_user_id = ? ORDER BY id DESC LIMIT 1", (user["id"],))
+        cur.execute("SELECT * FROM restaurants WHERE owner_user_id = ? ORDER BY id DESC LIMIT 1", (user["id"],))
         row = cur.fetchone()
         return dict(row) if row else None
 
@@ -343,36 +263,20 @@ class Storage:
         if not user:
             raise ValueError("Waiter user not found")
         cur = self.conn.cursor()
-        c.execute("INSERT INTO waiters (user_id, restaurant_id) VALUES (?, ?)", (user["id"], restaurant_id))
+        cur.execute("INSERT INTO waiters (user_id, restaurant_id) VALUES (?, ?)", (user["id"], restaurant_id))
         self.conn.commit()
-        # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
-            """
-            CREATE TABLE IF NOT EXISTS waiter_requests (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                restaurant_name TEXT NOT NULL,
-                restaurant_id TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-            );
-            """
-        )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
         wid = cur.lastrowid
         return self.get_waiter_by_id(wid) or {}
 
     def get_waiter_by_id(self, waiter_id: int) -> Optional[Dict[str, Any]]:
         cur = self.conn.cursor()
-        c.execute("SELECT * FROM waiters WHERE id = ?", (waiter_id,))
+        cur.execute("SELECT * FROM waiters WHERE id = ?", (waiter_id,))
         row = cur.fetchone()
         return dict(row) if row else None
 
     def list_waiters_for_restaurant(self, restaurant_id: int) -> List[Dict[str, Any]]:
         cur = self.conn.cursor()
-        c.execute("SELECT * FROM waiters WHERE restaurant_id = ? ORDER BY id DESC", (restaurant_id,))
+        cur.execute("SELECT * FROM waiters WHERE restaurant_id = ? ORDER BY id DESC", (restaurant_id,))
         rows = cur.fetchall()
         return [dict(r) for r in rows]
 
@@ -381,13 +285,13 @@ class Storage:
         if not user:
             return None
         cur = self.conn.cursor()
-        c.execute("SELECT * FROM waiters WHERE user_id = ? ORDER BY id DESC LIMIT 1", (user["id"],))
+        cur.execute("SELECT * FROM waiters WHERE user_id = ? ORDER BY id DESC LIMIT 1", (user["id"],))
         row = cur.fetchone()
         return dict(row) if row else None
 
     def list_transactions_by_waiter(self, waiter_id: int, limit: int = 10, offset: int = 0) -> List[Dict[str, Any]]:
         cur = self.conn.cursor()
-        c.execute(
+        cur.execute(
             "SELECT * FROM transactions WHERE waiter_id = ? ORDER BY id DESC LIMIT ? OFFSET ?",
             (waiter_id, limit, offset),
         )
@@ -401,30 +305,14 @@ class Storage:
         if not user:
             user = self.upsert_user(telegram_id, None, None)
         cur = self.conn.cursor()
-        c.execute("SELECT * FROM sessions WHERE user_id = ? ORDER BY id DESC LIMIT 1", (user["id"],))
+        cur.execute("SELECT * FROM sessions WHERE user_id = ? ORDER BY id DESC LIMIT 1", (user["id"],))
         row = cur.fetchone()
         if row:
             return dict(row)
-        c.execute("INSERT INTO sessions (user_id, is_active) VALUES (?, 0)", (user["id"],))
+        cur.execute("INSERT INTO sessions (user_id, is_active) VALUES (?, 0)", (user["id"],))
         self.conn.commit()
-        # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
-            """
-            CREATE TABLE IF NOT EXISTS waiter_requests (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                restaurant_name TEXT NOT NULL,
-                restaurant_id TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-            );
-            """
-        )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
         sid = cur.lastrowid
-        c.execute("SELECT * FROM sessions WHERE id = ?", (sid,))
+        cur.execute("SELECT * FROM sessions WHERE id = ?", (sid,))
         return dict(cur.fetchone())
 
     def set_session_active(self, telegram_id: int, active: bool) -> None:
@@ -432,56 +320,24 @@ class Storage:
         if not user:
             raise ValueError("User not found")
         cur = self.conn.cursor()
-        c.execute(
+        cur.execute(
             "UPDATE sessions SET is_active = ?, last_seen_at=CURRENT_TIMESTAMP WHERE user_id = ?",
             (1 if active else 0, user["id"]),
         )
         if cur.rowcount == 0:
-            c.execute("INSERT INTO sessions (user_id, is_active) VALUES (?, ?)", (user["id"], 1 if active else 0))
+            cur.execute("INSERT INTO sessions (user_id, is_active) VALUES (?, ?)", (user["id"], 1 if active else 0))
         self.conn.commit()
-        # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
-            """
-            CREATE TABLE IF NOT EXISTS waiter_requests (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                restaurant_name TEXT NOT NULL,
-                restaurant_id TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-            );
-            """
-        )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
 
     # ----------------------
     # Media
     # ----------------------
     def insert_media(self, telegram_file_id: Optional[str], file_path: Optional[str], mime_type: Optional[str], file_size: Optional[int]) -> int:
         cur = self.conn.cursor()
-        c.execute(
+        cur.execute(
             "INSERT INTO media (telegram_file_id, file_path, mime_type, file_size) VALUES (?, ?, ?, ?)",
             (telegram_file_id, file_path, mime_type, file_size),
         )
         self.conn.commit()
-        # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
-            """
-            CREATE TABLE IF NOT EXISTS waiter_requests (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                restaurant_name TEXT NOT NULL,
-                restaurant_id TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-            );
-            """
-        )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
         return cur.lastrowid
 
     # ----------------------
@@ -497,7 +353,7 @@ class Storage:
         if media_id and not self._get_media_by_id(media_id):
             media_id = None
             
-        c.execute(
+        cur.execute(
             """
             INSERT INTO transactions (
                 restaurant_id, waiter_id, media_id, bank, amount, currency, transaction_id, transaction_date,
@@ -507,22 +363,6 @@ class Storage:
             (restaurant_id, waiter_id, media_id, bank, amount, currency or 'ETB', transaction_id, transaction_date, transaction_time, payer, receiver, original_ref, status or 'completed', raw_ocr_text),
         )
         self.conn.commit()
-        # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
-            """
-            CREATE TABLE IF NOT EXISTS waiter_requests (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                restaurant_name TEXT NOT NULL,
-                restaurant_id TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-            );
-            """
-        )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
         return cur.lastrowid
 
     # ----------------------
@@ -533,7 +373,7 @@ class Storage:
         if not approver:
             raise ValueError("Approver not found")
         cur = self.conn.cursor()
-        c.execute(
+        cur.execute(
             """
             INSERT INTO approvals (approver_user_id, subject_user_id, subject_restaurant_id, subject_waiter_id, subject_type, action, status, notes)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -541,33 +381,17 @@ class Storage:
             (approver["id"], subject_user_id, subject_restaurant_id, subject_waiter_id, subject_type, action, status, notes),
         )
         self.conn.commit()
-        # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
-            """
-            CREATE TABLE IF NOT EXISTS waiter_requests (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                restaurant_name TEXT NOT NULL,
-                restaurant_id TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-            );
-            """
-        )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
         return cur.lastrowid
 
     def list_pending_approvals(self, subject_type: Optional[str] = None, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
         cur = self.conn.cursor()
         if subject_type:
-            c.execute(
+            cur.execute(
                 "SELECT * FROM approvals WHERE status='pending' AND subject_type = ? ORDER BY id DESC LIMIT ? OFFSET ?",
                 (subject_type, limit, offset),
             )
         else:
-            c.execute(
+            cur.execute(
                 "SELECT * FROM approvals WHERE status='pending' ORDER BY id DESC LIMIT ? OFFSET ?",
                 (limit, offset),
             )
@@ -575,24 +399,8 @@ class Storage:
 
     def set_approval_status(self, approval_id: int, status: str) -> None:
         cur = self.conn.cursor()
-        c.execute("UPDATE approvals SET status = ? WHERE id = ?", (status, approval_id))
+        cur.execute("UPDATE approvals SET status = ? WHERE id = ?", (status, approval_id))
         self.conn.commit()
-        # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
-            """
-            CREATE TABLE IF NOT EXISTS waiter_requests (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                restaurant_name TEXT NOT NULL,
-                restaurant_id TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-            );
-            """
-        )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
 
     # ----------------------
     # Audit Logs
@@ -603,40 +411,24 @@ class Storage:
             user = self.get_user_by_telegram(user_telegram_id)
             user_id = user["id"] if user else None
         cur = self.conn.cursor()
-        c.execute(
+        cur.execute(
             "INSERT INTO audit_logs (user_id, action, target, details) VALUES (?, ?, ?, ?)",
             (user_id, action, target, details),
         )
         self.conn.commit()
-        # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
-            """
-            CREATE TABLE IF NOT EXISTS waiter_requests (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                restaurant_name TEXT NOT NULL,
-                restaurant_id TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-            );
-            """
-        )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
         return cur.lastrowid
 
 
     def _get_media_by_id(self, media_id: int) -> Optional[Dict[str, Any]]:
         cur = self.conn.cursor()
-        c.execute("SELECT * FROM media WHERE id = ?", (media_id,))
+        cur.execute("SELECT * FROM media WHERE id = ?", (media_id,))
         row = cur.fetchone()
         return dict(row) if row else None
 
     def get_waiter_by_user_telegram(self, telegram_id: int) -> Optional[Dict[str, Any]]:
         """Get waiter by user telegram ID"""
         cur = self.conn.cursor()
-        c.execute(
+        cur.execute(
             """
             SELECT w.* FROM waiters w
             JOIN users u ON w.user_id = u.id
@@ -649,7 +441,7 @@ class Storage:
     def list_transactions_by_restaurant(self, restaurant_id: int, limit: int = 10, offset: int = 0) -> List[Dict[str, Any]]:
         """List transactions for a specific restaurant"""
         cur = self.conn.cursor()
-        c.execute(
+        cur.execute(
             """
             SELECT t.*, u.username as waiter_name 
             FROM transactions t
@@ -666,172 +458,3 @@ class Storage:
         if self._conn is not None:
             self._conn.close()
             self._conn = None
-
-    # ----------------------
-    # M1 & M2 Enhancement Functions (Non-Breaking)
-    # ----------------------
-    
-    def count_transactions_by_waiter(self, waiter_id: int) -> int:
-        """Count total transactions for a waiter - NEW FUNCTION"""
-        cur = self.conn.cursor()
-        c.execute("SELECT COUNT(*) FROM transactions WHERE waiter_id = ?", (waiter_id,))
-        return cur.fetchone()[0]
-
-    def count_transactions_by_restaurant(self, restaurant_id: int) -> int:
-        """Count total transactions for a restaurant - NEW FUNCTION"""
-        cur = self.conn.cursor()
-        c.execute("SELECT COUNT(*) FROM transactions WHERE restaurant_id = ?", (restaurant_id,))
-        return cur.fetchone()[0]
-
-    def list_waiters_by_restaurant(self, restaurant_id: int) -> List[Dict[str, Any]]:
-        """List all waiters for a restaurant - NEW FUNCTION"""
-        cur = self.conn.cursor()
-        c.execute(
-            """
-            SELECT w.*, u.username, u.full_name, u.telegram_id
-            FROM waiters w
-            JOIN users u ON w.user_id = u.id
-            WHERE w.restaurant_id = ?
-            ORDER BY u.full_name
-            """,
-            (restaurant_id,)
-        )
-        return [dict(r) for r in cur.fetchall()]
-
-    def get_transactions_by_date_range(self, restaurant_id: int, start_date, end_date) -> List[Dict[str, Any]]:
-        """Get transactions for a specific date range - NEW FUNCTION"""
-        cur = self.conn.cursor()
-        c.execute(
-            """
-            SELECT t.*, u.username as waiter_name, u.full_name as waiter_full_name
-            FROM transactions t
-            LEFT JOIN waiters w ON t.waiter_id = w.id
-            LEFT JOIN users u ON w.user_id = u.id
-            WHERE t.restaurant_id = ? AND t.created_at >= ? AND t.created_at < ?
-            ORDER BY t.created_at DESC
-            """,
-            (restaurant_id, start_date, end_date)
-        )
-        return [dict(r) for r in cur.fetchall()]
-
-    # ----------------------
-    # Waiter Request Functions (Feature 2)
-    # ----------------------
-    
-    def create_pending_waiter_request(self, user_id: int, restaurant_name: str, restaurant_id: str) -> int:
-        """Create a pending waiter request for restaurant approval - NEW FUNCTION"""
-        cur = self.conn.cursor()
-        c.execute(
-            """
-            INSERT INTO waiter_requests (user_id, restaurant_name, restaurant_id, status, created_at)
-            VALUES (?, ?, ?, 'pending', CURRENT_TIMESTAMP)
-            """,
-            (user_id, restaurant_name, restaurant_id)
-        )
-        self.conn.commit()
-        # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
-            """
-            CREATE TABLE IF NOT EXISTS waiter_requests (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                restaurant_name TEXT NOT NULL,
-                restaurant_id TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-            );
-            """
-        )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
-        return cur.lastrowid
-
-    def get_pending_waiter_requests(self, restaurant_id: int) -> List[Dict[str, Any]]:
-        """Get pending waiter requests for a restaurant - NEW FUNCTION"""
-        cur = self.conn.cursor()
-        c.execute(
-            """
-            SELECT wr.*, u.username, u.full_name, u.telegram_id
-            FROM waiter_requests wr
-            JOIN users u ON wr.user_id = u.id
-            WHERE wr.restaurant_id = ? AND wr.status = 'pending'
-            ORDER BY wr.created_at DESC
-            """,
-            (restaurant_id,)
-        )
-        return [dict(r) for r in cur.fetchall()]
-
-    def approve_waiter_request(self, request_id: int, restaurant_id: int) -> bool:
-        """Approve a waiter request and link to restaurant - NEW FUNCTION"""
-        cur = self.conn.cursor()
-        
-        # Get the request
-        c.execute("SELECT * FROM waiter_requests WHERE id = ?", (request_id,))
-        request = cur.fetchone()
-        if not request:
-            return False
-        
-        # Create waiter record
-        c.execute(
-            "INSERT INTO waiters (user_id, restaurant_id) VALUES (?, ?)",
-            (request['user_id'], restaurant_id)
-        )
-        
-        # Update user role
-        c.execute(
-            "UPDATE users SET role = 'WAITER' WHERE id = ?",
-            (request['user_id'],)
-        )
-        
-        # Update request status
-        c.execute(
-            "UPDATE waiter_requests SET status = 'approved' WHERE id = ?",
-            (request_id,)
-        )
-        
-        self.conn.commit()
-        # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
-            """
-            CREATE TABLE IF NOT EXISTS waiter_requests (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                restaurant_name TEXT NOT NULL,
-                restaurant_id TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-            );
-            """
-        )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
-        return True
-
-    def reject_waiter_request(self, request_id: int) -> bool:
-        """Reject a waiter request - NEW FUNCTION"""
-        cur = self.conn.cursor()
-        c.execute(
-            "UPDATE waiter_requests SET status = 'rejected' WHERE id = ?",
-            (request_id,)
-        )
-        self.conn.commit()
-        # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
-            """
-            CREATE TABLE IF NOT EXISTS waiter_requests (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                restaurant_name TEXT NOT NULL,
-                restaurant_id TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-            );
-            """
-        )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
-        return cur.rowcount > 0
-
