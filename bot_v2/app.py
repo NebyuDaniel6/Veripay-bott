@@ -1559,12 +1559,12 @@ async def handle_download_daily_report(update: Update):
         
         # Send PDF
         filename = f"daily_report_{datetime.now().strftime('%Y%m%d')}.pdf"
+        restaurant_name = restaurant["name"]
         await update.callback_query.message.reply_document(
             document=pdf_data,
             filename=filename,
-            caption=f"📄 Daily Report - {restaurant["name"]}\nDate: {datetime.now().strftime('%B %d, %Y')}"
-        )
-        # Show success message
+            caption=f"📄 Daily Report - {restaurant_name}\nDate: {datetime.now().strftime('%B %d, %Y')}"
+        )        # Show success message
         await update.callback_query.answer("✅ Report generated successfully!")
         
     except Exception as e:
