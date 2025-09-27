@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 class VisionOCR:
     def __init__(self):
-        creds_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', '/Users/macbook/veripay/veripay-credentials.json')
+        creds_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', 'veripay-credentials.json')
         try:
             credentials = service_account.Credentials.from_service_account_file(creds_path)
             self.client = vision.ImageAnnotatorClient(credentials=credentials)

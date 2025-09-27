@@ -1122,7 +1122,7 @@ async def show_waiter_management(update: Update):
     
     if not pending_waiter_approvals:
         text = "👥 **Waiter Management**\n\n📋 No pending waiter registrations."
-        keyboard = build_back_keyboard(user_id, user_languages, "back_to_restaurant_admin")
+        keyboard = build_back_keyboard(user_id, user_languages, "back_to_restaurant_admin").inline_keyboard
     else:
         text = "👥 **Waiter Management**\n\n📋 **Pending Waiter Registrations:**\n\n"
         keyboard = []
