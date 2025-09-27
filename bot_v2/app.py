@@ -1564,13 +1564,11 @@ async def handle_download_daily_report(update: Update):
             filename=filename,
             caption=f"📄 Daily Report - {restaurant["name"]}\nDate: {datetime.now().strftime('%B %d, %Y')}"
         )
-        
         # Show success message
         await update.callback_query.answer("✅ Report generated successfully!")
         
     except Exception as e:
         await update.callback_query.answer(f"❌ Error generating report: {str(e)}")
-
 async def show_pending_waiter_requests(update: Update):
     """Show pending waiter requests for approval - NEW FUNCTION"""
     user_id = update.callback_query.from_user.id
