@@ -1,1 +1,1 @@
-web: python app.py
+web: python -m bot_v2.app
