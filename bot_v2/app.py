@@ -1366,7 +1366,7 @@ async def show_restaurant_transactions(update: Update, page: int = 0):
         text = f"📒 **Restaurant Transactions**\n\n"
         text += f"**Page {page+1} of {(total_count + PAGE_SIZE - 1) // PAGE_SIZE}**\n"
         text += f"**Total: {total_count} transactions**\n\n"
-        for tx in transactions
+        for tx in transactions:
             text += f"💰 **{tx.get('amount', 'N/A')} ETB**\n"
             text += f"🏦 Bank: {tx.get('bank_name', 'Unknown')}\n"
             text += f"👤 Waiter: {tx.get('waiter_name', 'Unknown')}\n"
