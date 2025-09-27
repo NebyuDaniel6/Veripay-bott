@@ -1460,7 +1460,7 @@ def create_application(token: str):
 
 
     
-
+    return app
 
 
 # ----------------------
@@ -1557,7 +1557,6 @@ async def show_pending_waiter_requests(update: Update):
     ]
     
     await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=Markdown)
-    return app
 
 if __name__ == "__main__":
     # Debug environment variables
