@@ -1193,6 +1193,7 @@ async def handle_waiter_action(update: Update, action: str):
         new_page = int(action.split("_")[-1])
         await show_waiter_transactions(update, page=new_page)
     elif action == "waiter_help":
+        await show_waiter_help(update)
     elif action.startswith("restaurant_tx_page_"):
         new_page = int(action.split("_")[-1])
         await show_restaurant_transactions(update, page=new_page)
