@@ -1531,7 +1531,8 @@ async def show_restaurant_waiters(update: Update):
             tx_count = storage.count_transactions_by_waiter(waiter["id"])
             waiter_name = waiter.get("full_name") or waiter.get("username", "Unknown")
             text += f"👤 **{waiter_name}**\n"
-            text += f"📱 ID: {waiter.get("telegram_id", "N/A")}\n"
+            waiter_id = waiter.get("telegram_id", "N/A")
+            text += f"📱 ID: {waiter_id}\n"
             text += f"📊 Transactions: {tx_count}\n\n"
     
     keyboard = [
@@ -1591,9 +1592,12 @@ async def show_pending_waiter_requests(update: Update):
         for req in requests:
             req_name = req.get("full_name") or req.get("username", "Unknown")
             text += f"👤 **{req_name}**\n"
-            text += f"📱 ID: {req.get("telegram_id", "N/A")}\n"
-            text += f"🏪 Restaurant: {req.get("restaurant_name", "Unknown")}\n"
-            text += f"📅 Requested: {req.get("created_at", "Unknown")}\n\n"
+            req_id = req.get("telegram_id", "N/A")
+            text += f"📱 ID: {req_id}\n"
+            req_restaurant = req.get("restaurant_name", "Unknown")
+            text += f"🏪 Restaurant: {req_restaurant}\n"
+            req_date = req.get("created_at", "Unknown")
+            text += f"📅 Requested: {req_date}\n\n"
     
     keyboard = [
         [InlineKeyboardButton("🔙 Back to Restaurant Admin", callback_data="back_to_restaurant_admin")]
