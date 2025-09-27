@@ -122,7 +122,7 @@ def ensure_user_in_memory(user_id: int, storage: Storage) -> None:
         if db_user:
             users[user_id] = {
                 'id': user_id,
-                'username': db_user.get('username', '"Unknown"'),
+                'username': db_user.get('username', 'Unknown'),
                 'role': UserRole(db_user.get('role', 'NEW_USER')),
                 'restaurant_id': None,
                 'waiter_id': None,
@@ -134,7 +134,7 @@ def ensure_user_in_memory(user_id: int, storage: Storage) -> None:
             # User not found in database, create new user
             users[user_id] = {
                 'id': user_id,
-                'username': '"Unknown"',
+                'username': 'Unknown',
                 'role': UserRole.NEW_USER,
                 'restaurant_id': None,
                 'waiter_id': None,
@@ -1273,10 +1273,10 @@ async def show_waiter_transactions(update: Update, page: int = 0):
         text += f"**Page {page+1} of {(total_count + PAGE_SIZE - 1) // PAGE_SIZE}**\n"
         text += f"**Total: {total_count} transactions**\n\n"
         for tx in transactions:
-            text += f"💰 **{tx.get('amount', '"N/A"')} ETB**\n"
-            text += f"🏦 Bank: {tx.get('bank_name', '"Unknown"')}\n"
-            text += f"📅 Date: {tx.get('created_at', '"Unknown"')}\n"
-            text += f"📄 Receipt: {tx.get('receipt_number', '"N/A"')}\n\n"
+            text += f"💰 **{tx.get('amount', 'N/A')} ETB**\n"
+            text += f"🏦 Bank: {tx.get('bank_name', 'Unknown')}\n"
+            text += f"📅 Date: {tx.get('created_at', 'Unknown')}\n"
+            text += f"📄 Receipt: {tx.get('receipt_number', 'N/A')}\n\n"
     
     nav = []
     if page > 0:
@@ -1344,7 +1344,7 @@ async def show_waiter_management(update: Update):
         keyboard = []
         
         for waiter_user_id, waiter_data in pending_waiter_approvals.items():
-            text += f"👤 **Waiter:** {waiter_data.get('name', '"Unknown"')}\n"
+            text += f"👤 **Waiter:** {waiter_data.get('name', 'Unknown')}\n"
             text += f"📞 **Phone:** {waiter_data.get('phone', 'Not provided')}\n"
             text += f"🆔 **User ID:** {waiter_user_id}\n\n"
             
@@ -1408,10 +1408,10 @@ async def show_restaurant_transactions(update: Update, page: int = 0):
         text += f"**Page {page+1} of {(total_count + PAGE_SIZE - 1) // PAGE_SIZE}**\n"
         text += f"**Total: {total_count} transactions**\n\n"
         for tx in transactions:
-            text += f"💰 **{tx.get('amount', '"N/A"')} ETB**\n"
-            text += f"🏦 Bank: {tx.get('bank_name', '"Unknown"')}\n"
-            text += f"👤 Waiter: {tx.get('waiter_name', '"Unknown"')}\n"
-            text += f"📅 Date: {tx.get('created_at', '"Unknown"')}\n\n"
+            text += f"💰 **{tx.get('amount', 'N/A')} ETB**\n"
+            text += f"🏦 Bank: {tx.get('bank_name', 'Unknown')}\n"
+            text += f"👤 Waiter: {tx.get('waiter_name', 'Unknown')}\n"
+            text += f"📅 Date: {tx.get('created_at', 'Unknown')}\n\n"
     
     nav = []
     if page > 0:
