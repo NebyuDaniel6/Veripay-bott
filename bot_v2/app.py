@@ -192,7 +192,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # Legacy UI mode
-    username = user.username or ""Unknown""
+    username = user.username or "Unknown"
 
     # Check database first for existing user
     db_user = storage.get_user_by_telegram(user_id)
@@ -421,9 +421,9 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "bank_telebirr": "Telebirr",
                 "bank_dashen": "Dashen Bank",
                 "bank_abyssinia": "Bank of Abyssinia",
-                "bank_other": ""Unknown"",
+                "bank_other": "Unknown",
             }
-            chosen = mapping.get(data, ""Unknown"")
+            chosen = mapping.get(data, "Unknown")
             state.set_bank(user_id, chosen)
             state.set_step(user_id, "waiting_receipt")
             await query.edit_message_text(f"✅ Bank selected: {chosen}\n\n📸 Now upload a clear receipt photo.")
@@ -459,7 +459,7 @@ async def handle_legacy_callback(update: Update, context: ContextTypes.DEFAULT_T
         if user_id == super_admin_id:
             users[user_id] = users.get(user_id, {
                 'id': user_id,
-                'username': (update.effective_user.username or ""Unknown""),
+                'username': (update.effective_user.username or "Unknown"),
                 'role': UserRole.SUPER_ADMIN,
                 'restaurant_id': None,
                 'waiter_id': None,
@@ -673,7 +673,7 @@ async def handle_bank_selection(update: Update, bank_data: str):
         "bank_other": "Other"
     }
     
-    selected_bank = bank_mapping.get(bank_data, ""Unknown"")
+    selected_bank = bank_mapping.get(bank_data, "Unknown")
     user_selected_banks[user_id] = selected_bank
     user_states[user_id] = UserState.WAITING_FOR_RECEIPT_IMAGE
     
@@ -804,7 +804,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Get selected bank
         if LEGACY_UI:
-            bank_hint = user_selected_banks.get(user_id, ""Unknown"")
+            bank_hint = user_selected_banks.get(user_id, "Unknown")
         else:
             bank_hint = state.get_bank(user_id)
         
@@ -820,10 +820,10 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 state.set_last_ocr_text(user_id, full_text)
             
             # Extract OCR data first
-            bank = ocr_result.get("bank", ""Unknown"")
-            amount = ocr_result.get("amount", ""Unknown"")
-            sender = ocr_result.get("sender", ""Unknown"")
-            time_val = ocr_result.get("time", ""Unknown"")
+            bank = ocr_result.get("bank", "Unknown")
+            amount = ocr_result.get("amount", "Unknown")
+            sender = ocr_result.get("sender", "Unknown")
+            time_val = ocr_result.get("time", "Unknown")
             ref = ocr_result.get("reference", "")
             
             # Store transaction in database
@@ -851,7 +851,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     waiter_id=waiter_id,
                     media_id=media_id,
                     bank=bank,
-                    amount=amount if amount != ""Unknown"" else None,
+                    amount=amount if amount != "Unknown" else None,
                     currency='ETB',
                     transaction_id=ref,
                     transaction_date=None,
@@ -875,7 +875,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             result_parts = [
                 get_text(user_id, "captured", user_languages) if LEGACY_UI else "✅ Captured",
                 f"- Bank: {bank}",
-                f"- Amount: {amount} ETB" if amount != ""Unknown"" else "- Amount: "Unknown"",
+                f"- Amount: {amount} ETB" if amount != "Unknown" else "- Amount: Unknown",
                 f"- Sender: {sender}",
                 f"- Time: {time_val}",
             ]
