@@ -294,7 +294,7 @@ async def show_language_selection(update: Update):
         await update.message.reply_text(text, reply_markup=keyboard, parse_mode='Markdown')
     elif update.callback_query:
         try:
-            await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode="Markdown")
+            await safe_edit(update, text, reply_markup=keyboard, parse_mode="Markdown")
         except BadRequest as e:
             if "Message is not modified" in str(e):
                 await update.callback_query.answer("Already up to date!")
@@ -312,7 +312,7 @@ async def show_main_menu(update: Update):
         await update.message.reply_text(text, reply_markup=keyboard, parse_mode='Markdown')
     elif update.callback_query:
         try:
-            await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode="Markdown")
+            await safe_edit(update, text, reply_markup=keyboard, parse_mode="Markdown")
         except BadRequest as e:
             if "Message is not modified" in str(e):
                 await update.callback_query.answer("Already up to date!")
@@ -330,7 +330,7 @@ async def show_super_admin_menu(update: Update):
         await update.message.reply_text(text, reply_markup=keyboard, parse_mode='Markdown')
     elif update.callback_query:
         try:
-            await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode="Markdown")
+            await safe_edit(update, text, reply_markup=keyboard, parse_mode="Markdown")
         except BadRequest as e:
             if "Message is not modified" in str(e):
                 await update.callback_query.answer("Already up to date!")
@@ -354,7 +354,7 @@ async def show_restaurant_admin_menu(update: Update):
         await update.message.reply_text(text, reply_markup=keyboard, parse_mode='Markdown')
     elif update.callback_query:
         try:
-            await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode="Markdown")
+            await safe_edit(update, text, reply_markup=keyboard, parse_mode="Markdown")
         except BadRequest as e:
             if "Message is not modified" in str(e):
                 await update.callback_query.answer("Already up to date!")
@@ -377,7 +377,7 @@ async def show_waiter_menu(update: Update):
         await update.message.reply_text(text, reply_markup=keyboard, parse_mode='Markdown')
     elif update.callback_query:
         try:
-            await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode="Markdown")
+            await safe_edit(update, text, reply_markup=keyboard, parse_mode="Markdown")
         except BadRequest as e:
             if "Message is not modified" in str(e):
                 await update.callback_query.answer("Already up to date!")
@@ -630,7 +630,7 @@ async def setup_persistent_keyboard(update: Update, user_id: int, role: str):
         await update.message.reply_text(text, reply_markup=keyboard, parse_mode='Markdown')
     elif update.callback_query:
         try:
-            await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode="Markdown")
+            await safe_edit(update, text, reply_markup=keyboard, parse_mode="Markdown")
         except BadRequest as e:
             if "Message is not modified" in str(e):
                 await update.callback_query.answer("Already up to date!")
@@ -1240,13 +1240,10 @@ async def handle_waiter_action(update: Update, action: str):
         await show_restaurant_transactions(update, page=new_page)
     elif action == "view_restaurant_waiters":
         await show_restaurant_waiters(update)
-        print(f"DEBUG: view_restaurant_waiters callback received")
-        await show_restaurant_waiters(update)
+    elif action == "download_daily_report":
         await handle_download_daily_report(update)
-        print(f"DEBUG: download_daily_report callback received")
-        await handle_download_daily_report(update)
+    elif action == "manage_waiters":
         await show_pending_waiter_requests(update)
-
     else:
         await update.callback_query.edit_message_text("👤 Waiter feature coming soon...")
 
@@ -1545,9 +1542,9 @@ async def show_restaurant_waiters(update: Update):
 
 async def handle_download_daily_report(update: Update):
     """Handle daily report download - NEW FUNCTION"""
-    user_id = update.callback_query.from_user.id
+async def handle_download_daily_report(update: Update):
     print(f"DEBUG: handle_download_daily_report called for user {user_id}")    
-    # Get restaurant ID for this admin
+    """Handle daily report download - NEW FUNCTION"""    # Get restaurant ID for this admin
     restaurant = storage.get_restaurant_by_owner(user_id)
     if not restaurant:
         await update.callback_query.edit_message_text("❌ Restaurant not found.")
@@ -1565,16 +1562,16 @@ async def handle_download_daily_report(update: Update):
             document=pdf_data,
             filename=filename,
             caption=f"📄 Daily Report - {restaurant_name}\nDate: {datetime.now().strftime('%B %d, %Y')}"
-        )        # Show success message
+        )
+        # Show success message
         await update.callback_query.answer("✅ Report generated successfully!")
         
     except Exception as e:
         await update.callback_query.answer(f"❌ Error generating report: {str(e)}")
+
 async def show_pending_waiter_requests(update: Update):
     """Show pending waiter requests for approval - NEW FUNCTION"""
-    user_id = update.callback_query.from_user.id
-    
-    # Get restaurant ID for this admin
+    user_id = update.callback_query.from_user.id    # Get restaurant ID for this admin
     restaurant = storage.get_restaurant_by_owner(user_id)
     if not restaurant:
         await update.callback_query.edit_message_text("❌ Restaurant not found.")
