@@ -7,22 +7,22 @@ from google.oauth2 import service_account
 
 # Bank-specific parsers
 try:
-    from bot_v2.ocr_parsers import dashen as dashen_parser
+    from .ocr_parsers import dashen as dashen_parser
 except Exception:
     dashen_parser = None
 
 try:
-    from bot_v2.ocr_parsers import telebirr as telebirr_parser
+    from .ocr_parsers import telebirr as telebirr_parser
 except Exception:
     telebirr_parser = None
 
 try:
-    from bot_v2.ocr_parsers import cbe as cbe_parser
+    from .ocr_parsers import cbe as cbe_parser
 except Exception:
     cbe_parser = None
 
 try:
-    from bot_v2.ocr_parsers import abyssinia as abyssinia_parser
+    from .ocr_parsers import abyssinia as abyssinia_parser
 except Exception:
     abyssinia_parser = None
 
