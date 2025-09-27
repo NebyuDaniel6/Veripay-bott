@@ -122,7 +122,7 @@ def ensure_user_in_memory(user_id: int, storage: Storage) -> None:
         if db_user:
             users[user_id] = {
                 'id': user_id,
-                'username': db_user.get('username', 'Unknown'),
+                'username': db_user.get('username', '"Unknown"'),
                 'role': UserRole(db_user.get('role', 'NEW_USER')),
                 'restaurant_id': None,
                 'waiter_id': None,
@@ -134,7 +134,7 @@ def ensure_user_in_memory(user_id: int, storage: Storage) -> None:
             # User not found in database, create new user
             users[user_id] = {
                 'id': user_id,
-                'username': 'Unknown',
+                'username': '"Unknown"',
                 'role': UserRole.NEW_USER,
                 'restaurant_id': None,
                 'waiter_id': None,
@@ -192,7 +192,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # Legacy UI mode
-    username = user.username or "Unknown"
+    username = user.username or ""Unknown""
 
     # Check database first for existing user
     db_user = storage.get_user_by_telegram(user_id)
@@ -293,6 +293,13 @@ async def show_language_selection(update: Update):
     if update.message:
         await update.message.reply_text(text, reply_markup=keyboard, parse_mode='Markdown')
     elif update.callback_query:
+        try:
+            await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode="Markdown")
+        except BadRequest as e:
+            if "Message is not modified" in str(e):
+                await update.callback_query.answer("Already up to date!")
+            else:
+                raise
         await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
 
 async def show_main_menu(update: Update):
@@ -304,6 +311,13 @@ async def show_main_menu(update: Update):
     if update.message:
         await update.message.reply_text(text, reply_markup=keyboard, parse_mode='Markdown')
     elif update.callback_query:
+        try:
+            await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode="Markdown")
+        except BadRequest as e:
+            if "Message is not modified" in str(e):
+                await update.callback_query.answer("Already up to date!")
+            else:
+                raise
         await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
 
 async def show_super_admin_menu(update: Update):
@@ -315,6 +329,13 @@ async def show_super_admin_menu(update: Update):
     if update.message:
         await update.message.reply_text(text, reply_markup=keyboard, parse_mode='Markdown')
     elif update.callback_query:
+        try:
+            await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode="Markdown")
+        except BadRequest as e:
+            if "Message is not modified" in str(e):
+                await update.callback_query.answer("Already up to date!")
+            else:
+                raise
         await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
     # send persistent reply keyboard
     try:
@@ -332,6 +353,13 @@ async def show_restaurant_admin_menu(update: Update):
     if update.message:
         await update.message.reply_text(text, reply_markup=keyboard, parse_mode='Markdown')
     elif update.callback_query:
+        try:
+            await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode="Markdown")
+        except BadRequest as e:
+            if "Message is not modified" in str(e):
+                await update.callback_query.answer("Already up to date!")
+            else:
+                raise
         await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
     # send persistent reply keyboard
     try:
@@ -349,6 +377,13 @@ async def show_waiter_menu(update: Update):
     if update.message:
         await update.message.reply_text(text, reply_markup=keyboard, parse_mode='Markdown')
     elif update.callback_query:
+        try:
+            await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode="Markdown")
+        except BadRequest as e:
+            if "Message is not modified" in str(e):
+                await update.callback_query.answer("Already up to date!")
+            else:
+                raise
         await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
     # send persistent reply keyboard
     try:
@@ -386,9 +421,9 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "bank_telebirr": "Telebirr",
                 "bank_dashen": "Dashen Bank",
                 "bank_abyssinia": "Bank of Abyssinia",
-                "bank_other": "Unknown",
+                "bank_other": ""Unknown"",
             }
-            chosen = mapping.get(data, "Unknown")
+            chosen = mapping.get(data, ""Unknown"")
             state.set_bank(user_id, chosen)
             state.set_step(user_id, "waiting_receipt")
             await query.edit_message_text(f"✅ Bank selected: {chosen}\n\n📸 Now upload a clear receipt photo.")
@@ -424,7 +459,7 @@ async def handle_legacy_callback(update: Update, context: ContextTypes.DEFAULT_T
         if user_id == super_admin_id:
             users[user_id] = users.get(user_id, {
                 'id': user_id,
-                'username': (update.effective_user.username or "Unknown"),
+                'username': (update.effective_user.username or ""Unknown""),
                 'role': UserRole.SUPER_ADMIN,
                 'restaurant_id': None,
                 'waiter_id': None,
@@ -595,6 +630,13 @@ async def setup_persistent_keyboard(update: Update, user_id: int, role: str):
     if update.message:
         await update.message.reply_text(text, reply_markup=keyboard, parse_mode='Markdown')
     elif update.callback_query:
+        try:
+            await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode="Markdown")
+        except BadRequest as e:
+            if "Message is not modified" in str(e):
+                await update.callback_query.answer("Already up to date!")
+            else:
+                raise
         await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
 
 
@@ -631,7 +673,7 @@ async def handle_bank_selection(update: Update, bank_data: str):
         "bank_other": "Other"
     }
     
-    selected_bank = bank_mapping.get(bank_data, "Unknown")
+    selected_bank = bank_mapping.get(bank_data, ""Unknown"")
     user_selected_banks[user_id] = selected_bank
     user_states[user_id] = UserState.WAITING_FOR_RECEIPT_IMAGE
     
@@ -762,7 +804,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Get selected bank
         if LEGACY_UI:
-            bank_hint = user_selected_banks.get(user_id, "Unknown")
+            bank_hint = user_selected_banks.get(user_id, ""Unknown"")
         else:
             bank_hint = state.get_bank(user_id)
         
@@ -778,10 +820,10 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 state.set_last_ocr_text(user_id, full_text)
             
             # Extract OCR data first
-            bank = ocr_result.get("bank", "Unknown")
-            amount = ocr_result.get("amount", "Unknown")
-            sender = ocr_result.get("sender", "Unknown")
-            time_val = ocr_result.get("time", "Unknown")
+            bank = ocr_result.get("bank", ""Unknown"")
+            amount = ocr_result.get("amount", ""Unknown"")
+            sender = ocr_result.get("sender", ""Unknown"")
+            time_val = ocr_result.get("time", ""Unknown"")
             ref = ocr_result.get("reference", "")
             
             # Store transaction in database
@@ -809,7 +851,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     waiter_id=waiter_id,
                     media_id=media_id,
                     bank=bank,
-                    amount=amount if amount != "Unknown" else None,
+                    amount=amount if amount != ""Unknown"" else None,
                     currency='ETB',
                     transaction_id=ref,
                     transaction_date=None,
@@ -833,7 +875,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             result_parts = [
                 get_text(user_id, "captured", user_languages) if LEGACY_UI else "✅ Captured",
                 f"- Bank: {bank}",
-                f"- Amount: {amount} ETB" if amount != "Unknown" else "- Amount: Unknown",
+                f"- Amount: {amount} ETB" if amount != ""Unknown"" else "- Amount: "Unknown"",
                 f"- Sender: {sender}",
                 f"- Time: {time_val}",
             ]
@@ -1204,7 +1246,6 @@ async def handle_waiter_action(update: Update, action: str):
     elif action == "manage_waiters":
         await show_pending_waiter_requests(update)
 
-        await show_waiter_help(update)
     else:
         await update.callback_query.edit_message_text("👤 Waiter feature coming soon...")
 
@@ -1232,10 +1273,10 @@ async def show_waiter_transactions(update: Update, page: int = 0):
         text += f"**Page {page+1} of {(total_count + PAGE_SIZE - 1) // PAGE_SIZE}**\n"
         text += f"**Total: {total_count} transactions**\n\n"
         for tx in transactions:
-            text += f"💰 **{tx.get('amount', 'N/A')} ETB**\n"
-            text += f"🏦 Bank: {tx.get('bank_name', 'Unknown')}\n"
-            text += f"📅 Date: {tx.get('created_at', 'Unknown')}\n"
-            text += f"📄 Receipt: {tx.get('receipt_number', 'N/A')}\n\n"
+            text += f"💰 **{tx.get('amount', '"N/A"')} ETB**\n"
+            text += f"🏦 Bank: {tx.get('bank_name', '"Unknown"')}\n"
+            text += f"📅 Date: {tx.get('created_at', '"Unknown"')}\n"
+            text += f"📄 Receipt: {tx.get('receipt_number', '"N/A"')}\n\n"
     
     nav = []
     if page > 0:
@@ -1303,7 +1344,7 @@ async def show_waiter_management(update: Update):
         keyboard = []
         
         for waiter_user_id, waiter_data in pending_waiter_approvals.items():
-            text += f"👤 **Waiter:** {waiter_data.get('name', 'Unknown')}\n"
+            text += f"👤 **Waiter:** {waiter_data.get('name', '"Unknown"')}\n"
             text += f"📞 **Phone:** {waiter_data.get('phone', 'Not provided')}\n"
             text += f"🆔 **User ID:** {waiter_user_id}\n\n"
             
@@ -1367,10 +1408,10 @@ async def show_restaurant_transactions(update: Update, page: int = 0):
         text += f"**Page {page+1} of {(total_count + PAGE_SIZE - 1) // PAGE_SIZE}**\n"
         text += f"**Total: {total_count} transactions**\n\n"
         for tx in transactions:
-            text += f"💰 **{tx.get('amount', 'N/A')} ETB**\n"
-            text += f"🏦 Bank: {tx.get('bank_name', 'Unknown')}\n"
-            text += f"👤 Waiter: {tx.get('waiter_name', 'Unknown')}\n"
-            text += f"📅 Date: {tx.get('created_at', 'Unknown')}\n\n"
+            text += f"💰 **{tx.get('amount', '"N/A"')} ETB**\n"
+            text += f"🏦 Bank: {tx.get('bank_name', '"Unknown"')}\n"
+            text += f"👤 Waiter: {tx.get('waiter_name', '"Unknown"')}\n"
+            text += f"📅 Date: {tx.get('created_at', '"Unknown"')}\n\n"
     
     nav = []
     if page > 0:
@@ -1478,7 +1519,7 @@ async def show_restaurant_waiters(update: Update):
         return
     
     # Get waiters for this restaurant
-    waiters = storage.list_waiters_by_restaurant(restaurant[id])
+    waiters = storage.list_waiters_by_restaurant(restaurant["id"])
     
     if not waiters:
         text = "👥 **Restaurant Waiters**\n\nNo waiters assigned to your restaurant yet."
@@ -1487,9 +1528,9 @@ async def show_restaurant_waiters(update: Update):
         
         for waiter in waiters:
             # Get transaction count for this waiter
-            tx_count = storage.count_transactions_by_waiter(waiter[id])
-            text += f"👤 **{waiter.get(full_name, waiter.get(username, Unknown))}**\n"
-            text += f"📱 ID: {waiter.get(telegram_id, N/A)}\n"
+            tx_count = storage.count_transactions_by_waiter(waiter["id"])
+            text += f"👤 **{waiter.get(full_name, waiter.get(username, "Unknown"))}**\n"
+            text += f"📱 ID: {waiter.get(telegram_id, "N/A")}\n"
             text += f"📊 Transactions: {tx_count}\n\n"
     
     keyboard = [
@@ -1512,14 +1553,14 @@ async def handle_download_daily_report(update: Update):
     try:
         # Generate PDF
         pdf_generator = PDFGenerator(storage)
-        pdf_data = pdf_generator.generate_daily_report(restaurant[id])
+        pdf_data = pdf_generator.generate_daily_report(restaurant["id"])
         
         # Send PDF
         filename = f"daily_report_{datetime.now().strftime('%Y%m%d')}.pdf"
         await update.callback_query.message.reply_document(
             document=pdf_data,
             filename=filename,
-            caption=f"📄 Daily Report - {restaurant[name]}\nDate: {datetime.now().strftime('%B %d, %Y')}"
+            caption=f"📄 Daily Report - {restaurant["name"]}\nDate: {datetime.now().strftime('%B %d, %Y')}"
         )
         
         # Show success message
@@ -1539,7 +1580,7 @@ async def show_pending_waiter_requests(update: Update):
         return
     
     # Get pending requests
-    requests = storage.get_pending_waiter_requests(restaurant[id])
+    requests = storage.get_pending_waiter_requests(restaurant["id"])
     
     if not requests:
         text = "👥 **Pending Waiter Requests**\n\nNo pending requests at this time."
@@ -1547,10 +1588,10 @@ async def show_pending_waiter_requests(update: Update):
         text = f"👥 **Pending Waiter Requests**\n\n**Total: {len(requests)} requests**\n\n"
         
         for req in requests:
-            text += f"👤 **{req.get(full_name, req.get(username, Unknown))}**\n"
-            text += f"📱 ID: {req.get(telegram_id, N/A)}\n"
-            text += f"🏪 Restaurant: {req.get(restaurant_name, Unknown)}\n"
-            text += f"📅 Requested: {req.get(created_at, Unknown)}\n\n"
+            text += f"👤 **{req.get(full_name, req.get(username, "Unknown"))}**\n"
+            text += f"📱 ID: {req.get(telegram_id, "N/A")}\n"
+            text += f"🏪 Restaurant: {req.get(restaurant_name, "Unknown")}\n"
+            text += f"📅 Requested: {req.get(created_at, "Unknown")}\n\n"
     
     keyboard = [
         [InlineKeyboardButton("🔙 Back to Restaurant Admin", callback_data="back_to_restaurant_admin")]
