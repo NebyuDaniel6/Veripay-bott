@@ -1,40 +1,29 @@
+import sys
 import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import logging
-from flask import Flask, request, jsonify
-
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-app = Flask(__name__)
-
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    try:
-        data = request.get_json()
-        logger.info(f"Received webhook data: {data}")
-        return jsonify({"status": "ok", "message": "Webhook received"})
-    except Exception as e:
-        logger.error(f"Webhook error: {e}")
-        return jsonify({"status": "error", "message": str(e)}), 500
-
-@app.route('/health', methods=['GET'])
-def health():
-    return jsonify({"status": "healthy", "service": "veripay-bot"})
-
-@app.route('/', methods=['GET'])
-def root():
-    return jsonify({
-        "status": "VeriPay Bot is running", 
-        "version": "1.0",
-        "endpoints": ["/", "/health", "/webhook"]
-    })
-
-@app.route('/test', methods=['GET'])
-def test():
-    return jsonify({"message": "Test endpoint working!"})
+from bot_v2.app import create_application
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    logger.info(f"Starting Flask app on port {port}")
-    app.run(host="0.0.0.0", port=port, debug=False)
+    logging.basicConfig(level=logging.INFO)
+    token = os.environ.get("BOT_TOKEN")
+    if not token:
+        raise ValueError("BOT_TOKEN environment variable is required")
+    
+    app = create_application(token)
+    
+    if os.environ.get("USE_WEBHOOK", "0") == "1":
+        port = int(os.environ.get("PORT", 10000))
+        public_url = os.environ.get("PUBLIC_URL")
+        webhook_path = os.environ.get("WEBHOOK_PATH", "/webhook")
+        
+        if public_url:
+            print(f"Starting webhook mode on port {port} with URL {public_url}{webhook_path}")
+            app.run_webhook(listen="0.0.0.0", port=port, url_path=webhook_path, webhook_url=f"{public_url}{webhook_path}")
+        else:
+            print("PUBLIC_URL not set, falling back to polling")
+            app.run_polling()
+    else:
+        print("Starting polling mode")
+        app.run_polling()

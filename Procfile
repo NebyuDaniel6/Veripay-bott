@@ -1,1 +1,1 @@
-web: python -m bot_v2.app
+web: python -m bot_v2.app_webhook
