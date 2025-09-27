@@ -360,7 +360,6 @@ async def show_restaurant_admin_menu(update: Update):
                 await update.callback_query.answer("Already up to date!")
             else:
                 raise
-        await update.callback_query.edit_message_text(text, reply_markup=keyboard, parse_mode='Markdown')
     # send persistent reply keyboard
     try:
         reply_kb = ReplyKeyboardMarkup([[KeyboardButton("🏠 Home"), KeyboardButton("🧭 Menu"), KeyboardButton("❓ Help")]], resize_keyboard=True, one_time_keyboard=False)
@@ -1241,9 +1240,11 @@ async def handle_waiter_action(update: Update, action: str):
         await show_restaurant_transactions(update, page=new_page)
     elif action == "view_restaurant_waiters":
         await show_restaurant_waiters(update)
-    elif action == "download_daily_report":
+        print(f"DEBUG: view_restaurant_waiters callback received")
+        await show_restaurant_waiters(update)
         await handle_download_daily_report(update)
-    elif action == "manage_waiters":
+        print(f"DEBUG: download_daily_report callback received")
+        await handle_download_daily_report(update)
         await show_pending_waiter_requests(update)
 
     else:
@@ -1511,7 +1512,7 @@ def create_application(token: str):
 async def show_restaurant_waiters(update: Update):
     """Show all waiters for a restaurant - NEW FUNCTION"""
     user_id = update.callback_query.from_user.id
-    
+    print(f"DEBUG: show_restaurant_waiters called for user {user_id}")    
     # Get restaurant ID for this admin
     restaurant = storage.get_restaurant_by_owner(user_id)
     if not restaurant:
@@ -1545,7 +1546,7 @@ async def show_restaurant_waiters(update: Update):
 async def handle_download_daily_report(update: Update):
     """Handle daily report download - NEW FUNCTION"""
     user_id = update.callback_query.from_user.id
-    
+    print(f"DEBUG: handle_download_daily_report called for user {user_id}")    
     # Get restaurant ID for this admin
     restaurant = storage.get_restaurant_by_owner(user_id)
     if not restaurant:
