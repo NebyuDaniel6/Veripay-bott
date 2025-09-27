@@ -970,6 +970,16 @@ async def handle_super_admin_action(update: Update, action: str):
     
     if action == "super_pending_restaurants":
         await show_pending_restaurants(update)
+    elif action == "super_active_restaurants":
+        await show_active_restaurants(update)
+    elif action == "super_daily_reports":
+        await show_daily_reports(update)
+    elif action == "super_export_csv":
+        await export_transactions_csv(update, context, storage)
+    elif action == "super_export_analytics":
+        await export_analytics_report(update, context, storage)
+    elif action == "super_settings":
+        await show_super_admin_settings(update)
     elif action == "super_statistics":
         await show_system_statistics(update)
     elif action.startswith("approve_restaurant_"):
@@ -981,7 +991,7 @@ async def handle_super_admin_action(update: Update, action: str):
         restaurant_user_id = int(action.split("_")[-1])
         await reject_restaurant(update, restaurant_user_id)
     else:
-        await update.callback_query.edit_message_text("🔧 Super Admin feature coming soon...")
+        await safe_edit(update, "❌ Action not implemented yet. Please use the menu options above.", reply_markup=build_super_admin_menu_keyboard(update.callback_query.from_user.id, user_languages), parse_mode="Markdown")
 
 async def show_pending_restaurants(update: Update):
     """Show pending restaurant registrations"""
@@ -1630,3 +1640,54 @@ if __name__ == "__main__":
     else:
         print("Starting polling mode")
         app.run_polling()
+
+async def show_active_restaurants(update: Update):
+    """Show active restaurants"""
+    try:
+        restaurants = storage.get_all_restaurants()
+        if not restaurants:
+            text = "📊 **Active Restaurants**\n\nNo restaurants found."
+        else:
+            text = "📊 **Active Restaurants**\n\n"
+            for restaurant in restaurants:
+                text += f"🏪 **{restaurant['name']}**\n"
+                text += f"   📱 ID: {restaurant['id']}\n"
+                text += f"   👤 Admin: {restaurant.get('admin_name', 'Unknown')}\n"
+                text += f"   📅 Created: {restaurant.get('created_at', 'Unknown')[:10]}\n\n"
+        
+        keyboard = build_super_admin_menu_keyboard(update.callback_query.from_user.id, user_languages)
+        await safe_edit(update, text, reply_markup=keyboard, parse_mode="Markdown")
+    except Exception as e:
+        logger.error(f"Error showing active restaurants: {e}")
+        await safe_edit(update, "❌ Error loading restaurants. Please try again.")
+
+async def show_daily_reports(update: Update):
+    """Show daily reports menu"""
+    try:
+        text = "📊 **Daily Reports**\n\nSelect a report type:"
+        keyboard = [
+            [InlineKeyboardButton("📅 Today's Report", callback_data="super_today_report")],
+            [InlineKeyboardButton("📊 Weekly Report", callback_data="super_weekly_report")],
+            [InlineKeyboardButton("📈 Monthly Report", callback_data="super_monthly_report")],
+            [InlineKeyboardButton("🔙 Back to Menu", callback_data="super_pending_restaurants")]
+        ]
+        await safe_edit(update, text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+    except Exception as e:
+        logger.error(f"Error showing daily reports: {e}")
+        await safe_edit(update, "❌ Error loading reports. Please try again.")
+
+async def show_super_admin_settings(update: Update):
+    """Show Super Admin settings"""
+    try:
+        text = "⚙️ **Super Admin Settings**\n\nConfigure system settings:"
+        keyboard = [
+            [InlineKeyboardButton("🔧 System Config", callback_data="super_system_config")],
+            [InlineKeyboardButton("👥 User Management", callback_data="super_user_management")],
+            [InlineKeyboardButton("🔐 Security Settings", callback_data="super_security")],
+            [InlineKeyboardButton("🔙 Back to Menu", callback_data="super_pending_restaurants")]
+        ]
+        await safe_edit(update, text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+    except Exception as e:
+        logger.error(f"Error showing settings: {e}")
+        await safe_edit(update, "❌ Error loading settings. Please try again.")
+
