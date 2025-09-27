@@ -43,7 +43,7 @@ class Storage:
     def create_tables(self) -> None:
         c = self.conn.cursor()
         # users
-        c.execute(
+        cur.execute(
             """
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,10 +59,10 @@ class Storage:
             );
             """
         )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id);")
 
         # restaurants
-        c.execute(
+        cur.execute(
             """
             CREATE TABLE IF NOT EXISTS restaurants (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -76,7 +76,7 @@ class Storage:
         )
 
         # waiters
-        c.execute(
+        cur.execute(
             """
             CREATE TABLE IF NOT EXISTS waiters (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -88,10 +88,10 @@ class Storage:
             );
             """
         )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiters_restaurant_id ON waiters(restaurant_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiters_restaurant_id ON waiters(restaurant_id);")
 
         # sessions
-        c.execute(
+        cur.execute(
             """
             CREATE TABLE IF NOT EXISTS sessions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -103,10 +103,10 @@ class Storage:
             );
             """
         )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);")
 
         # media
-        c.execute(
+        cur.execute(
             """
             CREATE TABLE IF NOT EXISTS media (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -120,7 +120,7 @@ class Storage:
         )
 
         # transactions
-        c.execute(
+        cur.execute(
             """
             CREATE TABLE IF NOT EXISTS transactions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -145,12 +145,12 @@ class Storage:
             );
             """
         )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_tx_restaurant_id ON transactions(restaurant_id);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_tx_waiter_id ON transactions(waiter_id);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_tx_created_at ON transactions(created_at);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_tx_restaurant_id ON transactions(restaurant_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_tx_waiter_id ON transactions(waiter_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_tx_created_at ON transactions(created_at);")
 
         # approvals
-        c.execute(
+        cur.execute(
             """
             CREATE TABLE IF NOT EXISTS approvals (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -170,10 +170,10 @@ class Storage:
             );
             """
         )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status);")
 
         # audit_logs
-        c.execute(
+        cur.execute(
             """
             CREATE TABLE IF NOT EXISTS audit_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -188,7 +188,7 @@ class Storage:
         )
         self.conn.commit()
         # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
+        cur.execute(
             """
             CREATE TABLE IF NOT EXISTS waiter_requests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -201,8 +201,8 @@ class Storage:
             );
             """
         )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
 
     # ----------------------
     # Users
@@ -226,7 +226,7 @@ class Storage:
         )
         self.conn.commit()
         # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
+        cur.execute(
             """
             CREATE TABLE IF NOT EXISTS waiter_requests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -239,8 +239,8 @@ class Storage:
             );
             """
         )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
         return self.get_user_by_telegram(telegram_id) or {}
 
     def get_user_by_telegram(self, telegram_id: int) -> Optional[Dict[str, Any]]:
@@ -254,7 +254,7 @@ class Storage:
         cur.execute("UPDATE users SET language = ?, updated_at=CURRENT_TIMESTAMP WHERE telegram_id = ?", (language, telegram_id))
         self.conn.commit()
         # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
+        cur.execute(
             """
             CREATE TABLE IF NOT EXISTS waiter_requests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -267,15 +267,15 @@ class Storage:
             );
             """
         )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
 
     def set_user_role(self, telegram_id: int, role: str) -> None:
         cur = self.conn.cursor()
         cur.execute("UPDATE users SET role = ?, updated_at=CURRENT_TIMESTAMP WHERE telegram_id = ?", (role, telegram_id))
         self.conn.commit()
         # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
+        cur.execute(
             """
             CREATE TABLE IF NOT EXISTS waiter_requests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -288,8 +288,8 @@ class Storage:
             );
             """
         )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
 
     # ----------------------
     # Restaurants
@@ -302,7 +302,7 @@ class Storage:
         cur.execute("INSERT INTO restaurants (owner_user_id, name, phone) VALUES (?, ?, ?)", (user["id"], name, phone))
         self.conn.commit()
         # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
+        cur.execute(
             """
             CREATE TABLE IF NOT EXISTS waiter_requests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -315,8 +315,8 @@ class Storage:
             );
             """
         )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
         rid = cur.lastrowid
         return self.get_restaurant_by_id(rid) or {}
 
@@ -346,7 +346,7 @@ class Storage:
         cur.execute("INSERT INTO waiters (user_id, restaurant_id) VALUES (?, ?)", (user["id"], restaurant_id))
         self.conn.commit()
         # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
+        cur.execute(
             """
             CREATE TABLE IF NOT EXISTS waiter_requests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -359,8 +359,8 @@ class Storage:
             );
             """
         )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
         wid = cur.lastrowid
         return self.get_waiter_by_id(wid) or {}
 
@@ -408,7 +408,7 @@ class Storage:
         cur.execute("INSERT INTO sessions (user_id, is_active) VALUES (?, 0)", (user["id"],))
         self.conn.commit()
         # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
+        cur.execute(
             """
             CREATE TABLE IF NOT EXISTS waiter_requests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -421,8 +421,8 @@ class Storage:
             );
             """
         )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
         sid = cur.lastrowid
         cur.execute("SELECT * FROM sessions WHERE id = ?", (sid,))
         return dict(cur.fetchone())
@@ -440,7 +440,7 @@ class Storage:
             cur.execute("INSERT INTO sessions (user_id, is_active) VALUES (?, ?)", (user["id"], 1 if active else 0))
         self.conn.commit()
         # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
+        cur.execute(
             """
             CREATE TABLE IF NOT EXISTS waiter_requests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -453,8 +453,8 @@ class Storage:
             );
             """
         )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
 
     # ----------------------
     # Media
@@ -467,7 +467,7 @@ class Storage:
         )
         self.conn.commit()
         # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
+        cur.execute(
             """
             CREATE TABLE IF NOT EXISTS waiter_requests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -480,8 +480,8 @@ class Storage:
             );
             """
         )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
         return cur.lastrowid
 
     # ----------------------
@@ -508,7 +508,7 @@ class Storage:
         )
         self.conn.commit()
         # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
+        cur.execute(
             """
             CREATE TABLE IF NOT EXISTS waiter_requests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -521,8 +521,8 @@ class Storage:
             );
             """
         )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
         return cur.lastrowid
 
     # ----------------------
@@ -542,7 +542,7 @@ class Storage:
         )
         self.conn.commit()
         # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
+        cur.execute(
             """
             CREATE TABLE IF NOT EXISTS waiter_requests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -555,8 +555,8 @@ class Storage:
             );
             """
         )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
         return cur.lastrowid
 
     def list_pending_approvals(self, subject_type: Optional[str] = None, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
@@ -578,7 +578,7 @@ class Storage:
         cur.execute("UPDATE approvals SET status = ? WHERE id = ?", (status, approval_id))
         self.conn.commit()
         # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
+        cur.execute(
             """
             CREATE TABLE IF NOT EXISTS waiter_requests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -591,8 +591,8 @@ class Storage:
             );
             """
         )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
 
     # ----------------------
     # Audit Logs
@@ -609,7 +609,7 @@ class Storage:
         )
         self.conn.commit()
         # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
+        cur.execute(
             """
             CREATE TABLE IF NOT EXISTS waiter_requests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -622,8 +622,8 @@ class Storage:
             );
             """
         )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
         return cur.lastrowid
 
 
@@ -730,7 +730,7 @@ class Storage:
         )
         self.conn.commit()
         # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
+        cur.execute(
             """
             CREATE TABLE IF NOT EXISTS waiter_requests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -743,8 +743,8 @@ class Storage:
             );
             """
         )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
         return cur.lastrowid
 
     def get_pending_waiter_requests(self, restaurant_id: int) -> List[Dict[str, Any]]:
@@ -792,7 +792,7 @@ class Storage:
         
         self.conn.commit()
         # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
+        cur.execute(
             """
             CREATE TABLE IF NOT EXISTS waiter_requests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -805,8 +805,8 @@ class Storage:
             );
             """
         )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
         return True
 
     def reject_waiter_request(self, request_id: int) -> bool:
@@ -818,7 +818,7 @@ class Storage:
         )
         self.conn.commit()
         # waiter_requests (M1 & M2 Enhancement)
-        c.execute(
+        cur.execute(
             """
             CREATE TABLE IF NOT EXISTS waiter_requests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -831,7 +831,7 @@ class Storage:
             );
             """
         )
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
-        c.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_status ON waiter_requests(status);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_waiter_requests_restaurant ON waiter_requests(restaurant_id);")
         return cur.rowcount > 0
 
