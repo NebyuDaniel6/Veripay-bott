@@ -1534,18 +1534,16 @@ async def show_restaurant_waiters(update: Update):
         [InlineKeyboardButton("🔙 Back to Restaurant Admin", callback_data="back_to_restaurant_admin")]
     ]
     
-    await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=Markdown)
 
 async def handle_download_daily_report(update: Update):
     """Handle daily report download - NEW FUNCTION"""
-async def handle_download_daily_report(update: Update):
-    print(f"DEBUG: handle_download_daily_report called for user {user_id}")    
-    """Handle daily report download - NEW FUNCTION"""    # Get restaurant ID for this admin
+    user_id = update.callback_query.from_user.id
+    print(f"DEBUG: handle_download_daily_report called for user {user_id}")
+    # Get restaurant ID for this admin
     restaurant = storage.get_restaurant_by_owner(user_id)
     if not restaurant:
         await update.callback_query.edit_message_text("❌ Restaurant not found.")
         return
-    
     try:
         # Generate PDF
         pdf_generator = PDFGenerator(storage)
