@@ -5,7 +5,7 @@ services:
     plan: free
     branch: deploy-fresh
     buildCommand: pip install -r requirements.txt
-    startCommand: cd bot_v2 && python app.py
+    startCommand: python -m bot_v2.app
     envVars:
       - key: BOT_TOKEN
         sync: false
