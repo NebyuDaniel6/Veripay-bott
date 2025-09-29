@@ -549,7 +549,7 @@ async def start_waiter_registration(update: Update):
     # Prompt for restaurant id or name
     user_states[user_id] = UserState.WAITING_FOR_RESTAURANT_SELECTION
     await update.callback_query.edit_message_text(
-        "Please enter your Restaurant ID or exact Restaurant Name:",
+        "Please enter your Restaurant ID (e.g., 001, 002) or exact Restaurant Name:",
         parse_mode='Markdown'
     )
 
@@ -1257,11 +1257,29 @@ async def show_restaurant_settings(update: Update):
     """Show restaurant settings"""
     user_id = update.callback_query.from_user.id
     
+    # Get restaurant data
+    restaurant = storage.get_restaurant_by_owner(user_id)
+    if not restaurant:
+        await update.callback_query.edit_message_text(
+            "❌ Restaurant not found. Please contact support.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Back to Restaurant Admin", callback_data="back_to_restaurant_admin")
+            ]])
+        )
+        return
+    
+    # Format restaurant ID with leading zeros (001, 002, etc.)
+    restaurant_id_formatted = f"{restaurant["id"]:03d}"
+    
     text = "⚙️ **Restaurant Settings**\n\n"
-    text += "• Restaurant Name: [Your Restaurant]\n"
-    text += "• Phone: [Your Phone]\n"
-    text += "• Status: Active\n\n"
-    text += "Settings management coming soon..."
+    text += f"• **Restaurant ID:** `{restaurant_id_formatted}`\n"
+    text += f"• **Restaurant Name:** {restaurant.get("name", "Not set")}\n"
+    text += f"• **Phone:** {restaurant.get("phone", "Not set")}\n"
+    text += f"• **Status:** Active\n\n"
+    text += "Share your Restaurant ID with waiters for registration."
+    
+    keyboard = [[InlineKeyboardButton("🔙 Back to Restaurant Admin", callback_data="back_to_restaurant_admin")]]
+    await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
     
     keyboard = [[InlineKeyboardButton("🔙 Back to Restaurant Admin", callback_data="back_to_restaurant_admin")]]
     await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
