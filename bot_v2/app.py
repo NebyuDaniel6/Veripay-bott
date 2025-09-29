@@ -1220,6 +1220,15 @@ async def show_restaurant_reconciliation(update: Update):
     
     keyboard = [[InlineKeyboardButton("🔙 Back to Restaurant Admin", callback_data="back_to_restaurant_admin")]]
     await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+
+# Global error handler to avoid unhandled exceptions bubbling up
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    try:
+        logger.exception("Unhandled exception while processing update", exc_info=context.error)
+    except Exception:
+        # Last-resort guard
+        pass
+
 def create_application(token: str):
     app = ApplicationBuilder().token(token).build()
     global storage, ocr
@@ -1236,6 +1245,9 @@ def create_application(token: str):
     if LEGACY_UI:
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
 
+    # Register global error handler
+    app.add_error_handler(error_handler)
+
     return app
 
 if __name__ == "__main__":
@@ -1243,6 +1255,28 @@ if __name__ == "__main__":
     token = os.environ.get("BOT_TOKEN")
     if not token:
         raise ValueError("BOT_TOKEN environment variable is required")
+
+    use_webhook = os.environ.get("USE_WEBHOOK", "0") == "1"
+    public_url = os.environ.get("PUBLIC_URL", "").strip()
+    webhook_path = os.environ.get("WEBHOOK_PATH", "/webhook").strip() or "/webhook"
+    port_str = os.environ.get("PORT", "10000").strip()
+    try:
+        port = int(port_str)
+    except ValueError:
+        port = 10000
+
     app = create_application(token)
-    print("Bot is running! Press Ctrl+C to stop.")
-    app.run_polling()
+
+    if use_webhook and public_url:
+        # Webhook mode for Render
+        print(f"Starting webhook mode on port {port} with URL {public_url}{webhook_path}")
+        app.run_webhook(
+            listen="0.0.0.0",
+            port=port,
+            url_path=webhook_path,
+            webhook_url=f"{public_url}{webhook_path}",
+        )
+    else:
+        # Local development polling
+        print("Starting polling mode (USE_WEBHOOK=0 or PUBLIC_URL missing)")
+        app.run_polling()
