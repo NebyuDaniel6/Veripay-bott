@@ -30,13 +30,41 @@ logger = logging.getLogger(__name__)
 
 class VisionOCR:
     def __init__(self):
-        creds_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', 'veripay-credentials.json')
-        try:
-            credentials = service_account.Credentials.from_service_account_file(creds_path)
-            self.client = vision.ImageAnnotatorClient(credentials=credentials)
-        except Exception as e:
-            logger.warning(f"Vision unavailable: {e}")
-            self.client = None
+        # Prefer explicit env path
+        env_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', '').strip()
+        # Common Render secret file location
+        render_path = '/opt/render/project/src/veripay-credentials.json'
+        # Local cwd fallback
+        cwd_path = os.path.join(os.getcwd(), 'veripay-credentials.json')
+        # Repo root fallback (this file is in bot_v2/)
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        root_path = os.path.join(repo_root, 'veripay-credentials.json')
+
+        candidates = [p for p in [env_path, render_path, cwd_path, root_path] if p]
+
+        credentials = None
+        client = None
+        last_error = None
+
+        for path in candidates:
+            try:
+                if os.path.exists(path):
+                    credentials = service_account.Credentials.from_service_account_file(path)
+                    client = vision.ImageAnnotatorClient(credentials=credentials)
+                    logger.info(f"✅ Vision OCR initialized from file: {path}")
+                    break
+                else:
+                    last_error = FileNotFoundError(f"No such file: '{path}'")
+            except Exception as e:
+                last_error = e
+                continue
+
+        if client is None:
+            logger.warning(
+                "Vision unavailable: %s",
+                last_error or "No credential path found"
+            )
+        self.client = client
 
     def _fallback_basic(self, text: str, bank_hint: Optional[str]) -> Dict[str, Any]:
         data: Dict[str, Any] = {"raw_text": text}
@@ -48,35 +76,64 @@ class VisionOCR:
         elif "abyssinia" in bank:
             data["bank"] = "Bank of Abyssinia"
         else:
-            data["bank"] = "Commercial Bank of Ethiopia" if ("cbe" in bank or "commercial bank of ethiopia" in text.lower()) else "Unknown"
+            data["bank"] = "Unknown"
+        # Basic parsers try: amount, reference via regex
+        amount_match = re.search(r"(\d+[\.,]?\d*)\s*(?:ETB|Birr|Br)", text, re.IGNORECASE)
+        if amount_match:
+            data["amount"] = amount_match.group(1).replace(',', '')
+        ref_match = re.search(r"(?:Ref(?:erence)?\s*[:#-]?\s*)([A-Za-z0-9-]{5,})", text, re.IGNORECASE)
+        if ref_match:
+            data["transaction_id"] = ref_match.group(1)
         return data
 
-    def extract(self, image_bytes: bytes, bank_hint: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def extract_text_from_image(self, image_bytes: bytes) -> Optional[str]:
         if not self.client:
             return None
         image = vision.Image(content=image_bytes)
-        response = self.client.text_detection(image=image)
-        texts = response.text_annotations or []
-        if not texts:
+        response = self.client.document_text_detection(image=image)
+        if response.error.message:
+            logger.warning("Vision API error: %s", response.error.message)
             return None
-        full_text = texts[0].description
-        bank_l = (bank_hint or "").lower()
+        return response.full_text_annotation.text or ""
 
-        # Dispatch to bank-specific parser
-        try:
-            if "dashen" in bank_l and dashen_parser:
-                parsed = dashen_parser.extract_fields(full_text)
-            elif "telebirr" in bank_l and telebirr_parser:
-                parsed = telebirr_parser.extract_fields(full_text)
-            elif ("cbe" in bank_l or "commercial bank of ethiopia" in bank_l) and cbe_parser:
-                parsed = cbe_parser.extract_fields(full_text)
-            elif "abyssinia" in bank_l and abyssinia_parser:
-                parsed = abyssinia_parser.extract_fields(full_text)
-            else:
-                parsed = self._fallback_basic(full_text, bank_hint)
-        except Exception as e:
-            logger.warning(f"Parser error for bank '{bank_hint}': {e}")
-            parsed = self._fallback_basic(full_text, bank_hint)
+    def extract(self, image_bytes: bytes, bank_hint: Optional[str] = None) -> Dict[str, Any]:
+        """Extract structured data from receipt image."""
+        text = self.extract_text_from_image(image_bytes)
+        if not text:
+            return {"ok": False, "error": "no_text", "message": "OCR failed"}
 
-        parsed["raw_text"] = full_text
-        return parsed
+        lower = text.lower()
+        # Prefer bank-specific parsers if available
+        if "telebirr" in lower and telebirr_parser:
+            try:
+                parsed = telebirr_parser.parse(text)
+                parsed["raw_text"] = text
+                return {"ok": True, **parsed}
+            except Exception:
+                pass
+        if "dashen" in lower and dashen_parser:
+            try:
+                parsed = dashen_parser.parse(text)
+                parsed["raw_text"] = text
+                return {"ok": True, **parsed}
+            except Exception:
+                pass
+        if ("commercial bank" in lower or "cbe" in lower) and cbe_parser:
+            try:
+                parsed = cbe_parser.parse(text)
+                parsed["raw_text"] = text
+                return {"ok": True, **parsed}
+            except Exception:
+                pass
+        if "abyssinia" in lower and abyssinia_parser:
+            try:
+                parsed = abyssinia_parser.parse(text)
+                parsed["raw_text"] = text
+                return {"ok": True, **parsed}
+            except Exception:
+                pass
+
+        # Fallback generic parsing
+        parsed = self._fallback_basic(text, bank_hint)
+        parsed["raw_text"] = text
+        return {"ok": True, **parsed}
