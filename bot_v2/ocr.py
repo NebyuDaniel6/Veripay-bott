@@ -68,13 +68,16 @@ class VisionOCR:
 
     def _fallback_basic(self, text: str, bank_hint: Optional[str]) -> Dict[str, Any]:
         data: Dict[str, Any] = {"raw_text": text}
-        bank = (bank_hint or "").lower()
-        if "telebirr" in bank:
+        bank_hint_l = (bank_hint or "").lower()
+        text_l = text.lower()
+        if "telebirr" in bank_hint_l or "telebirr" in text_l:
             data["bank"] = "Telebirr"
-        elif "dashen" in bank:
+        elif "dashen" in bank_hint_l or "dashen" in text_l:
             data["bank"] = "Dashen Bank"
-        elif "abyssinia" in bank:
+        elif "abyssinia" in bank_hint_l or "abyssinia" in text_l:
             data["bank"] = "Bank of Abyssinia"
+        elif "cbe" in bank_hint_l or "commercial bank" in text_l or "commercial bank of ethiopia" in text_l:
+            data["bank"] = "Commercial Bank of Ethiopia"
         else:
             data["bank"] = "Unknown"
         # Basic parsers try: amount, reference via regex
