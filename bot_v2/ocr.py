@@ -92,6 +92,27 @@ class VisionOCR:
                 data["amount"] = m.group(1).replace(',', '')
                 break
         # Reference / transaction id patterns
+        # Telebirr-specific patterns
+        if "telebirr" in text_l:
+            # Amount with negative sign and ETB
+            telebirr_amount = re.search(r"-([0-9,]+(?:\.[0-9]{2})?)\s*(?:\(ETB\)|ETB)", text)
+            if telebirr_amount:
+                data["amount"] = telebirr_amount.group(1).replace(",", "")
+            
+            # Transaction Number format
+            telebirr_txn = re.search(r"Transaction\s+Number[:\s]+([A-Z0-9]{8,12})", text, re.IGNORECASE)
+            if telebirr_txn:
+                data["transaction_id"] = telebirr_txn.group(1)
+            
+            # Transaction To (recipient)
+            telebirr_to = re.search(r"Transaction\s+To[:\s]+([A-Za-z\s]+)", text, re.IGNORECASE)
+            if telebirr_to:
+                data["sender"] = telebirr_to.group(1).strip()
+            
+            # Transaction Time
+            telebirr_time = re.search(r"Transaction\s+Time[:\s]+(\d{4}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2})", text)
+            if telebirr_time:
+                data["time"] = telebirr_time.group(1)
         ref_patterns = [
             r"(?:Ref(?:erence)?\s*(?:No\.?|#)?\s*[:\-]?\s*)([A-Za-z0-9\-]{5,})",
             r"(?:Txn(?:\s*ID)?|Transaction(?:\s*ID)?)\s*[:\-]?\s*([A-Za-z0-9\-]{5,})",
