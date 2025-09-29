@@ -1284,6 +1284,10 @@ async def show_restaurant_settings(update: Update):
     keyboard = [[InlineKeyboardButton("🔙 Back to Restaurant Admin", callback_data="back_to_restaurant_admin")]]
     await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
+async def health(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Health check endpoint"""
+    await update.message.reply_text("✅ Bot is running and healthy!")
+
 async def show_restaurant_reconciliation(update: Update):
     """Show restaurant reconciliation (placeholder)"""
     user_id = update.callback_query.from_user.id
