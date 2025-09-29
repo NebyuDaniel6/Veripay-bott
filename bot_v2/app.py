@@ -64,7 +64,8 @@ SIMPLE_BANK_BUTTONS = [
 ]
 
 state = StateStore()
-storage: Storage
+storage = Storage(os.environ.get("DATABASE_URL", "sqlite:///veripay_dev.db"))
+ocr = VisionOCR()
 ocr: VisionOCR
 
 # Legacy UI state management
