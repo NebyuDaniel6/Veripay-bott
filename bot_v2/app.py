@@ -124,12 +124,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # Check if user exists in database
-    # Safety check: if user is already logged in, don't reinitialize
-    if user_id in users and users[user_id].get('role') != UserRole.NEW_USER:
-        # User is already logged in, just show their dashboard
-        role = users[user_id]['role'].value
-        await setup_persistent_keyboard(update, user_id, role)
-        return
     if db_user:
         # User exists - restore their role and state
         role = db_user.get('role', 'NEW_USER')

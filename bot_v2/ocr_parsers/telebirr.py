@@ -29,11 +29,11 @@ def parse(text: str) -> Dict[str, Any]:
             data["amount"] = match.group(1).replace(',', '')
             break
     
-    # Transaction Number patterns - be more specific to avoid "Download"
+    # Transaction Number patterns - be more specific
     transaction_patterns = [
-        r"Transaction\s+Number[:\s]+([A-Z0-9]{8,12})(?=\s|$|\n)",  # Transaction Number: CHC85K0LMU
-        r"Transaction\s+ID[:\s]+([A-Z0-9]{8,12})(?=\s|$|\n)",      # Transaction ID: CHC85K0LMU
-        r"Ref(?:erence)?\s+No[:\s]+([A-Z0-9]{8,12})(?=\s|$|\n)",   # Ref No: CHC85K0LMU
+        r"Transaction\s+Number[:\s]+([A-Z0-9]{8,12})",  # Transaction Number: CHC85K0LMU
+        r"Transaction\s+ID[:\s]+([A-Z0-9]{8,12})",      # Transaction ID: CHC85K0LMU
+        r"Ref(?:erence)?\s+No[:\s]+([A-Z0-9]{8,12})",   # Ref No: CHC85K0LMU
     ]
     
     for pattern in transaction_patterns:
@@ -42,18 +42,21 @@ def parse(text: str) -> Dict[str, Any]:
             data["transaction_id"] = match.group(1)
             break
     
-    # Recipient/Sender patterns - be more specific to avoid "Transaction Number"
+    # Recipient/Sender patterns - be more specific and handle OCR variations
     recipient_patterns = [
-        r"Transaction\s+To[:\s]+([A-Za-z]+)(?=\s|$|\n|Transaction)",  # Transaction To: Mekonen
-        r"To[:\s]+([A-Za-z]+)(?=\s|$|\n|Transaction)",               # To: Mekonen
-        r"Recipient[:\s]+([A-Za-z]+)(?=\s|$|\n|Transaction)",        # Recipient: Mekonen
+        r"Transaction\s+To[:\s]+([A-Za-z]+?)(?=\s*$|\s*\n|\s*Transaction|\s*Number)",  # Transaction To: Mekonen
+        r"To[:\s]+([A-Za-z]+?)(?=\s*$|\s*\n|\s*Transaction)",                         # To: Mekonen
+        r"Recipient[:\s]+([A-Za-z]+?)(?=\s*$|\s*\n|\s*Transaction)",                  # Recipient: Mekonen
     ]
     
     for pattern in recipient_patterns:
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
-            data["sender"] = match.group(1).strip()
-            break
+            name = match.group(1).strip()
+            # Filter out common OCR errors
+            if name not in ['Transaction', 'Number', 'Type', 'Time', 'Download', 'Share']:
+                data["sender"] = name
+                break
     
     # Time patterns - look for timestamp format
     time_patterns = [
