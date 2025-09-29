@@ -1288,6 +1288,17 @@ async def health(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Health check endpoint"""
     await update.message.reply_text("✅ Bot is running and healthy!")
 
+async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle data from Telegram Web App"""
+    user_id = update.effective_user.id
+    web_app_data = update.message.web_app_data
+    
+    if web_app_data:
+        data = web_app_data.data
+        await update.message.reply_text(f"📱 Received data from Web App: {data}")
+    else:
+        await update.message.reply_text("❌ No data received from Web App")
+
 async def show_restaurant_reconciliation(update: Update):
     """Show restaurant reconciliation (placeholder)"""
     user_id = update.callback_query.from_user.id
