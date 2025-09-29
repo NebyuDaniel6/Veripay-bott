@@ -637,7 +637,13 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             amount = ocr_result.get("amount", "Unknown")
             sender = ocr_result.get("sender", "Unknown")
             time_val = ocr_result.get("time", "Unknown")
-            ref = ocr_result.get("reference", "")
+            # Prefer transaction id across banks
+            ref = (
+                ocr_result.get("transaction_id")
+                or ocr_result.get("reference")
+                or ocr_result.get("original_ref")
+                or ""
+            )
             
             # Store transaction in database
             try:
@@ -690,11 +696,15 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"- Bank: {bank}",
                 f"- Amount: {amount} ETB" if amount != "Unknown" else "- Amount: Unknown",
                 f"- Sender: {sender}",
-                f"- Time: {time_val}",
             ]
-            
+
+            # Show Transaction ID prominently
             if ref:
-                result_parts.append(f"- Ref: {ref}")
+                result_parts.append(f"- Transaction ID: {ref}")
+
+            # Show time if available
+            if time_val and time_val != "Unknown":
+                result_parts.append(f"- Time: {time_val}")
             
             if LEGACY_UI:
                 keyboard = build_payment_result_keyboard(user_id, user_languages)
