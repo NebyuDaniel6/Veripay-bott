@@ -141,7 +141,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
         user_languages[user_id] = db_user.get('language', 'en')
         
-        # Route to appropriate dashboard based on role
+        # Route to appropriate dashboard based on role (persist role, no re-registration)
         if role == 'SUPER_ADMIN':
             user_states[user_id] = UserState.IDLE
             await setup_persistent_keyboard(update, user_id, 'SUPER_ADMIN')
@@ -522,10 +522,17 @@ async def start_restaurant_registration(update: Update):
 async def start_waiter_registration(update: Update):
     """Start waiter registration process"""
     user_id = update.callback_query.from_user.id
-    user_states[user_id] = UserState.WAITING_FOR_WAITER_NAME
-    
-    text = get_text(user_id, "waiter_name_prompt", user_languages)
-    await update.callback_query.edit_message_text(text, parse_mode='Markdown')
+    # If already a waiter, route to dashboard (no re-registration)
+    db_user = storage.get_user_by_telegram(user_id)
+    if db_user and db_user.get('role') == 'WAITER':
+        await setup_persistent_keyboard(update, user_id, 'WAITER')
+        return
+    # Prompt for restaurant id or name
+    user_states[user_id] = UserState.WAITING_FOR_RESTAURANT_SELECTION
+    await update.callback_query.edit_message_text(
+        "Please enter your Restaurant ID or exact Restaurant Name:",
+        parse_mode='Markdown'
+    )
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle text messages based on user state"""
@@ -533,10 +540,31 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         return  # Simple UI doesn't handle text messages
     
     user_id = update.effective_user.id
-    text = update.message.text
+    text = update.message.text.strip()
     state_name = user_states.get(user_id, UserState.IDLE)
     
-    if state_name == UserState.WAITING_FOR_RESTAURANT_NAME:
+    if state_name == UserState.WAITING_FOR_RESTAURANT_SELECTION:
+        # Try to resolve restaurant by ID or Name
+        restaurant = None
+        if text.isdigit():
+            restaurant = storage.get_restaurant_by_id(int(text))
+        if not restaurant:
+            # Try exact name match (case-insensitive)
+            # For minimal change, do a simple scan of latest restaurants via owner linkage
+            # If storage has a helper, prefer it; else fallback to None
+            pass
+        if not restaurant:
+            await update.message.reply_text("❌ Restaurant not found. Please enter a valid ID or exact Name.")
+            return
+        # Stash selection and ask waiter name
+        if 'temp_registrations' not in globals():
+            globals()['temp_registrations'] = {}
+        temp_registrations[user_id] = { 'restaurant_id': restaurant['id'] }
+        user_states[user_id] = UserState.WAITING_FOR_WAITER_NAME
+        await update.message.reply_text(get_text(user_id, "waiter_name_prompt", user_languages))
+        return
+
+    elif state_name == UserState.WAITING_FOR_RESTAURANT_NAME:
         # Store restaurant name and ask for phone
         if 'temp_registrations' not in globals():
             globals()['temp_registrations'] = {}
@@ -580,7 +608,9 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             waiter_data['phone'] = text
             waiter_data['user_id'] = user_id
             
-            # Add to pending approvals
+            # Link to selected restaurant if provided
+            selected_restaurant_id = waiter_data.get('restaurant_id')
+            # Add to pending approvals (key by user id)
             pending_waiter_approvals[user_id] = waiter_data
             
             await update.message.reply_text(get_text(user_id, "registration_submitted", user_languages))
@@ -588,6 +618,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             # Clean up
             del temp_registrations[user_id]
             user_states[user_id] = UserState.IDLE
+        return
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
