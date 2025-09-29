@@ -1269,7 +1269,8 @@ async def show_restaurant_settings(update: Update):
         return
     
     # Format restaurant ID with leading zeros (001, 002, etc.)
-    restaurant_id_formatted = f"{restaurant["id"]:03d}"
+    restaurant_id = restaurant["id"]
+    restaurant_id_formatted = f"{restaurant_id:03d}"
     
     text = "⚙️ **Restaurant Settings**\n\n"
     text += f"• **Restaurant ID:** `{restaurant_id_formatted}`\n"
