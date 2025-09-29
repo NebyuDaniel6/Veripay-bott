@@ -1250,8 +1250,6 @@ async def show_restaurant_transactions(update: Update):
             text += f"👤 Waiter: {tx.get('waiter_name', 'Unknown')}\n"
             text += f"📅 Date: {tx.get('created_at', 'Unknown')}\n\n"
     
-    keyboard = [[InlineKeyboardButton("🔙 Back to Restaurant Admin", callback_data="back_to_restaurant_admin")]]
-    await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 
 async def show_restaurant_settings(update: Update):
     """Show restaurant settings"""
@@ -1272,18 +1270,19 @@ async def show_restaurant_settings(update: Update):
     restaurant_id = restaurant["id"]
     restaurant_id_formatted = f"{restaurant_id:03d}"
     
+    # Extract restaurant data
+    restaurant_name = restaurant.get("name", "Not set")
+    restaurant_phone = restaurant.get("phone", "Not set")
+    
     text = "⚙️ **Restaurant Settings**\n\n"
     text += f"• **Restaurant ID:** `{restaurant_id_formatted}`\n"
-    text += f"• **Restaurant Name:** {restaurant.get("name", "Not set")}\n"
-    text += f"• **Phone:** {restaurant.get("phone", "Not set")}\n"
+    text += f"• **Restaurant Name:** {restaurant_name}\n"
+    text += f"• **Phone:** {restaurant_phone}\n"
     text += f"• **Status:** Active\n\n"
     text += "Share your Restaurant ID with waiters for registration."
     
     keyboard = [[InlineKeyboardButton("🔙 Back to Restaurant Admin", callback_data="back_to_restaurant_admin")]]
     await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
-    
-    keyboard = [[InlineKeyboardButton("🔙 Back to Restaurant Admin", callback_data="back_to_restaurant_admin")]]
-    await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 
 async def show_restaurant_reconciliation(update: Update):
     """Show restaurant reconciliation (placeholder)"""
@@ -1310,16 +1309,14 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
 
 def create_application(token: str):
     app = ApplicationBuilder().token(token).build()
-    global storage, ocr
-    storage = Storage(os.environ.get("DATABASE_URL", "sqlite:///veripay_dev.db"))
-    ocr = VisionOCR()
     
-    # Create database tables
-    storage.create_tables()
-
+    # Add handlers
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("menu", menu))
+    app.add_handler(CommandHandler("health", health))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(CallbackQueryHandler(handle_callback))
-    app.add_handler(MessageHandler(filters.PHOTO & ~filters.COMMAND, handle_photo))
+    app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_web_app_data))
     
     if LEGACY_UI:
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
