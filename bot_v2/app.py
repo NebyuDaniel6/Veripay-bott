@@ -1,5 +1,6 @@
 import sys
-from bot_v2.health_server import run_health_serverimport os
+from bot_v2.health_server import run_health_server
+import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import logging
 import os
