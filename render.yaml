@@ -1,5 +1,5 @@
 services:
-  - type: background
+  - type: web
     name: veripay-bot-bg
     env: python
     plan: free

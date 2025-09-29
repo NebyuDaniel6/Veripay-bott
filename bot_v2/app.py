@@ -1,5 +1,5 @@
 import sys
-import os
+from bot_v2.health_server import run_health_serverimport os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import logging
 import os
@@ -1342,6 +1342,8 @@ def create_application(token: str):
     return app
 
 if __name__ == "__main__":
+    # Start health server for keep-alive
+    run_health_server()
     logging.basicConfig(level=logging.INFO)
     token = os.environ.get("BOT_TOKEN")
     if not token:
