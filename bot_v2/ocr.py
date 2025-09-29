@@ -80,13 +80,49 @@ class VisionOCR:
             data["bank"] = "Commercial Bank of Ethiopia"
         else:
             data["bank"] = "Unknown"
-        # Basic parsers try: amount, reference via regex
-        amount_match = re.search(r"(\d+[\.,]?\d*)\s*(?:ETB|Birr|Br)", text, re.IGNORECASE)
-        if amount_match:
-            data["amount"] = amount_match.group(1).replace(',', '')
-        ref_match = re.search(r"(?:Ref(?:erence)?\s*[:#-]?\s*)([A-Za-z0-9-]{5,})", text, re.IGNORECASE)
-        if ref_match:
-            data["transaction_id"] = ref_match.group(1)
+        # Amount patterns (ETB before/after, with commas/decimals)
+        amount_patterns = [
+            r"(?:Amount|Paid|Total)\s*[:\-]?\s*([0-9][\d,]*(?:\.[0-9]{1,2})?)\s*(?:ETB|Birr|Br)?",
+            r"(?:ETB|Birr|Br)\s*([0-9][\d,]*(?:\.[0-9]{1,2})?)",
+            r"([0-9][\d,]*(?:\.[0-9]{1,2})?)\s*(?:ETB|Birr|Br)"
+        ]
+        for pat in amount_patterns:
+            m = re.search(pat, text, re.IGNORECASE)
+            if m:
+                data["amount"] = m.group(1).replace(',', '')
+                break
+        # Reference / transaction id patterns
+        ref_patterns = [
+            r"(?:Ref(?:erence)?\s*(?:No\.?|#)?\s*[:\-]?\s*)([A-Za-z0-9\-]{5,})",
+            r"(?:Txn(?:\s*ID)?|Transaction(?:\s*ID)?)\s*[:\-]?\s*([A-Za-z0-9\-]{5,})",
+            r"(?:Receipt\s*(?:No\.|#)?)\s*[:\-]?\s*([A-Za-z0-9\-]{5,})"
+        ]
+        for pat in ref_patterns:
+            m = re.search(pat, text, re.IGNORECASE)
+            if m:
+                data["transaction_id"] = m.group(1)
+                break
+        # Sender patterns
+        sender_patterns = [
+            r"(?:From|Sender|Payer)\s*[:\-]\s*([\w .]+)",
+            r"(?:Account\s*Name)\s*[:\-]\s*([\w .]+)"
+        ]
+        for pat in sender_patterns:
+            m = re.search(pat, text, re.IGNORECASE)
+            if m:
+                data["sender"] = m.group(1).strip()
+                break
+        # Time / date patterns
+        time_patterns = [
+            r"\b(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2})?)\b",
+            r"\b(\d{2}/\d{2}/\d{4}\s+\d{1,2}:\d{2}(?:\s*[AP]M)?)\b",
+            r"\b(\d{2}-\d{2}-\d{4}\s+\d{1,2}:\d{2}(?:\s*[AP]M)?)\b"
+        ]
+        for pat in time_patterns:
+            m = re.search(pat, text, re.IGNORECASE)
+            if m:
+                data["time"] = m.group(1)
+                break
         return data
 
     def extract_text_from_image(self, image_bytes: bytes) -> Optional[str]:
