@@ -126,6 +126,7 @@ def build_main_menu_keyboard(user_id: int, user_languages: Dict[int, str]) -> In
         [InlineKeyboardButton(get_text(user_id, "register_waiter", user_languages), callback_data="register_waiter")],
         [InlineKeyboardButton(get_text(user_id, "help", user_languages), callback_data="help")],
         [InlineKeyboardButton("🔓 Logout", callback_data="logout")],
+        [InlineKeyboardButton("🔓 Logout", callback_data="logout")],
         [InlineKeyboardButton(get_text(user_id, "language", user_languages), callback_data="change_language")]
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -139,6 +140,7 @@ def build_super_admin_menu_keyboard(user_id: int, user_languages: Dict[int, str]
         [InlineKeyboardButton(get_text(user_id, "statistics", user_languages), callback_data="super_statistics")],
         [InlineKeyboardButton(get_text(user_id, "settings", user_languages), callback_data="super_settings")],
         [InlineKeyboardButton("🔓 Logout", callback_data="logout")],
+        [InlineKeyboardButton("🔓 Logout", callback_data="logout")],
         [InlineKeyboardButton(get_text(user_id, "language", user_languages), callback_data="change_language")]
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -150,6 +152,7 @@ def build_restaurant_admin_menu_keyboard(user_id: int, user_languages: Dict[int,
         [InlineKeyboardButton("📒 Restaurant Transactions", callback_data="restaurant_transactions")],
         [InlineKeyboardButton("⚙️ Settings", callback_data="restaurant_settings")],
         [InlineKeyboardButton("🔄 Make Reconciliation", callback_data="restaurant_reconciliation")],
+        [InlineKeyboardButton("🔓 Logout", callback_data="logout")],
         [InlineKeyboardButton(get_text(user_id, "language", user_languages), callback_data="change_language")]
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -160,6 +163,7 @@ def build_waiter_menu_keyboard(user_id: int, user_languages: Dict[int, str]) -> 
         [InlineKeyboardButton(get_text(user_id, "capture_payment", user_languages), callback_data="waiter_capture_payment")],
         [InlineKeyboardButton("📒 My Transactions", callback_data="waiter_transactions")],
         [InlineKeyboardButton(get_text(user_id, "help", user_languages), callback_data="waiter_help")],
+        [InlineKeyboardButton("🔓 Logout", callback_data="logout")],
         [InlineKeyboardButton(get_text(user_id, "language", user_languages), callback_data="change_language")]
     ]
     return InlineKeyboardMarkup(keyboard)

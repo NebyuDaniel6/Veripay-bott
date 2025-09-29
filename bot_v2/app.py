@@ -187,6 +187,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await show_main_menu(update)
 
+async def handle_logout(update: Update):
+    """Handle logout - reset user state and show main menu"""
+    user_id = update.effective_user.id
+    
+    # Clear user state and role from memory
+    if user_id in users:
+        del users[user_id]
+    if user_id in user_states:
+        del user_states[user_id]
+    if user_id in user_languages:
+        del user_languages[user_id]
+    
+    # Show main menu for re-registration
+    await show_main_menu(update)
+
 async def show_language_selection(update: Update):
     """Show language selection menu"""
     keyboard = build_language_selection_keyboard()
@@ -321,6 +336,10 @@ async def handle_legacy_callback(update: Update, context: ContextTypes.DEFAULT_T
         return
     
     # Change language
+    # Logout
+    if data == "logout":
+        await handle_logout(update)
+        return
     if data == "change_language":
         await show_language_selection(update)
         return
