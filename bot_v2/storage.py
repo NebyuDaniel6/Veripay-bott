@@ -418,6 +418,77 @@ class Storage:
         self.conn.commit()
         return cur.lastrowid
 
+    # ----------------------
+    # Reconciliation storage (bank statements)
+    # ----------------------
+    def ensure_reconciliation_tables(self) -> None:
+        c = self.conn.cursor()
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS bank_statements (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                restaurant_id INTEGER NOT NULL,
+                bank TEXT NOT NULL,
+                uploaded_by_user_id INTEGER,
+                uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(restaurant_id) REFERENCES restaurants(id) ON DELETE CASCADE,
+                FOREIGN KEY(uploaded_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+            );
+            """
+        )
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS bank_statement_lines (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                statement_id INTEGER NOT NULL,
+                line_index INTEGER,
+                datetime TEXT,
+                reference TEXT,
+                credit_amount TEXT,
+                raw_text TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(statement_id) REFERENCES bank_statements(id) ON DELETE CASCADE
+            );
+            """
+        )
+        self.conn.commit()
+
+    def create_bank_statement(self, restaurant_id: int, bank: str, uploaded_by_telegram_id: int) -> int:
+        self.ensure_reconciliation_tables()
+        cur = self.conn.cursor()
+        uploader = self.get_user_by_telegram(uploaded_by_telegram_id)
+        cur.execute(
+            "INSERT INTO bank_statements (restaurant_id, bank, uploaded_by_user_id) VALUES (?, ?, ?)",
+            (restaurant_id, bank, (uploader["id"] if uploader else None)),
+        )
+        self.conn.commit()
+        return cur.lastrowid
+
+    def insert_bank_statement_line(self, statement_id: int, idx: int, dt: Optional[str], reference: Optional[str], credit: Optional[str], raw_text: Optional[str]) -> int:
+        self.ensure_reconciliation_tables()
+        cur = self.conn.cursor()
+        cur.execute(
+            "INSERT INTO bank_statement_lines (statement_id, line_index, datetime, reference, credit_amount, raw_text) VALUES (?, ?, ?, ?, ?, ?)",
+            (statement_id, idx, dt, reference, credit, raw_text),
+        )
+        self.conn.commit()
+        return cur.lastrowid
+
+    def list_bank_statements(self, restaurant_id: int, bank: str, limit: int = 10) -> List[Dict[str, Any]]:
+        self.ensure_reconciliation_tables()
+        cur = self.conn.cursor()
+        cur.execute(
+            "SELECT * FROM bank_statements WHERE restaurant_id = ? AND bank = ? ORDER BY id DESC LIMIT ?",
+            (restaurant_id, bank, limit),
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+    def list_bank_statement_lines(self, statement_id: int) -> List[Dict[str, Any]]:
+        self.ensure_reconciliation_tables()
+        cur = self.conn.cursor()
+        cur.execute("SELECT * FROM bank_statement_lines WHERE statement_id = ? ORDER BY line_index ASC", (statement_id,))
+        return [dict(r) for r in cur.fetchall()]
+
 
     def _get_media_by_id(self, media_id: int) -> Optional[Dict[str, Any]]:
         cur = self.conn.cursor()

@@ -1242,6 +1242,12 @@ async def handle_restaurant_admin_action(update: Update, action: str):
         await show_restaurant_settings(update)
     elif action == "restaurant_reconciliation":
         await show_restaurant_reconciliation(update)
+    elif action == "restaurant_recon_upload":
+        await start_statement_upload(update)
+    elif action == "restaurant_recon_run":
+        await run_reconciliation(update)
+    elif action == "restaurant_recon_download":
+        await download_last_report(update)
     else:
         await update.callback_query.edit_message_text("🏪 Restaurant Admin feature coming soon...")
 
@@ -1363,6 +1369,9 @@ def create_application(token: str):
     if LEGACY_UI:
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
 
+    # Register statement document handler (PDF and CSV)
+    app.add_handler(MessageHandler((filters.Document.PDF | filters.Document.FileExtension("csv")), handle_statement_document))
+
     # Register global error handler
     app.add_error_handler(error_handler)
 
@@ -1399,3 +1408,168 @@ if __name__ == "__main__":
         # Local development polling
         print("Starting polling mode (USE_WEBHOOK=0 or PUBLIC_URL missing)")
         app.run_polling()
+
+
+async def start_statement_upload(update: Update):
+    user_id = update.callback_query.from_user.id
+    restaurant = storage.get_restaurant_by_owner(user_id)
+    if not restaurant:
+        await update.callback_query.edit_message_text("❌ Restaurant not found.")
+        return
+    await update.callback_query.edit_message_text(
+        "📄 Please upload your CBE bank statement as PDF or CSV.\n- Match keys: References (transaction number) and Credit (amount)."
+    )
+
+async def handle_statement_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.document:
+        return
+    doc = update.message.document
+    user_id = update.effective_user.id
+    restaurant = storage.get_restaurant_by_owner(user_id)
+    if not restaurant:
+        await update.message.reply_text("❌ Restaurant not found.")
+        return
+
+    try:
+        file = await context.bot.get_file(doc.file_id)
+        file_bytes = await file.download_as_bytearray()
+    except Exception as e:
+        await update.message.reply_text(f"❌ Failed to download file: {e}")
+        return
+
+    statement_id = storage.create_bank_statement(restaurant["id"], "CBE", user_id)
+    parsed = 0
+    name_l = (doc.file_name or "").lower()
+
+    if name_l.endswith(".csv"):
+        import csv, io
+        f = io.StringIO(file_bytes.decode("utf-8", errors="ignore"))
+        reader = csv.DictReader(f)
+        for idx, row in enumerate(reader):
+            ref = (row.get("References") or row.get("Reference") or "").strip().upper()
+            credit = (row.get("Credit") or row.get("Amount Credit") or "").replace(",", "").strip()
+            dt = row.get("Date") or row.get("DateTime") or None
+            raw = str(row)
+            if not ref and not credit:
+                continue
+            storage.insert_bank_statement_line(statement_id, idx, dt, ref or None, credit or None, raw)
+            parsed += 1
+    elif name_l.endswith(".pdf"):
+        from PyPDF2 import PdfReader
+        import re, io
+        reader = PdfReader(io.BytesIO(file_bytes))
+        idx = 0
+        for page in reader.pages:
+            text = page.extract_text() or ""
+            for line in text.splitlines():
+                m_ref = re.search(r"Reference(?:s)?[:\s]+([A-Z0-9\-]{6,})", line, re.IGNORECASE)
+                m_credit = re.search(r"Credit[:\s]+([0-9][\d,]*(?:\.[0-9]{2})?)", line, re.IGNORECASE)
+                if m_ref or m_credit:
+                    ref = (m_ref.group(1).strip().upper() if m_ref else None)
+                    credit = (m_credit.group(1).replace(",", "") if m_credit else None)
+                    storage.insert_bank_statement_line(statement_id, idx, None, ref, credit, line.strip())
+                    parsed += 1
+                    idx += 1
+    else:
+        await update.message.reply_text("❌ Unsupported file type. Please upload PDF or CSV.")
+        return
+
+    await update.message.reply_text(f"✅ Statement stored. Parsed lines: {parsed}")
+
+async def run_reconciliation(update: Update):
+    user_id = update.callback_query.from_user.id
+    restaurant = storage.get_restaurant_by_owner(user_id)
+    if not restaurant:
+        await update.callback_query.edit_message_text("❌ Restaurant not found.")
+        return
+
+    stmts = storage.list_bank_statements(restaurant["id"], "CBE", limit=1)
+    if not stmts:
+        await update.callback_query.edit_message_text("⚠️ No CBE statement uploaded yet.")
+        return
+    stmt = stmts[0]
+    lines = storage.list_bank_statement_lines(stmt["id"]) or []
+
+    bank_index = {}
+    for ln in lines:
+        ref = (ln.get("reference") or "").strip().upper()
+        amt = (ln.get("credit_amount") or "").replace(",", "").strip()
+        if ref and amt:
+            bank_index.setdefault((ref, amt), []).append(ln)
+
+    txs = storage.list_transactions_by_restaurant(restaurant["id"], limit=10000, offset=0)
+
+    matched = []
+    unmatched_bot = []
+    dup_bot = []
+    seen_bot = set()
+
+    for tx in txs:
+        ref = (tx.get("transaction_id") or tx.get("original_ref") or "").strip().upper()
+        amt = (tx.get("amount") or "").replace(",", "").strip()
+        key = (ref, amt)
+        if not ref or not amt:
+            unmatched_bot.append(tx)
+            continue
+        if key in seen_bot:
+            dup_bot.append(tx)
+            continue
+        seen_bot.add(key)
+        cand = bank_index.get(key)
+        if cand:
+            matched.append((tx, cand[0]))
+        else:
+            unmatched_bot.append(tx)
+
+    matched_keys = set((tx.get("transaction_id") or tx.get("original_ref") or "", (tx.get("amount") or "").replace(",", "").strip()) for (tx, _) in matched)
+    bank_unmatched = []
+    for k, v in bank_index.items():
+        if k not in matched_keys and k not in seen_bot:
+            bank_unmatched.extend(v)
+
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.pagesizes import A4
+    import io
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    w, h = A4
+    y = h - 40
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(40, y, f"Reconciliation Report - {restaurant.get('name', 'Restaurant')} (CBE)")
+    y -= 20
+    c.setFont("Helvetica", 10)
+    c.drawString(40, y, f"Matched: {len(matched)}  |  Unmatched (Bot): {len(unmatched_bot)}  |  Unmatched (Bank): {len(bank_unmatched)}  |  Duplicates (Bot): {len(dup_bot)}")
+    y -= 20
+
+    def draw_section(title, items, limit=20):
+        nonlocal y
+        c.setFont("Helvetica-Bold", 11)
+        c.drawString(40, y, title)
+        y -= 16
+        c.setFont("Helvetica", 9)
+        for i, item in enumerate(items[:limit]):
+            if isinstance(item, tuple):
+                tx, ln = item
+                line = f"{tx.get('transaction_id','?')} / {tx.get('amount','?')}  ↔  {ln.get('reference','?')} / {ln.get('credit_amount','?')}"
+            else:
+                line = str(item)
+            c.drawString(40, y, line[:100])
+            y -= 12
+            if y < 60:
+                c.showPage(); y = h - 40
+        y -= 8
+
+    draw_section("Matched (sample)", matched)
+    draw_section("Unmatched Bot (sample)", unmatched_bot)
+    draw_section("Unmatched Bank (sample)", bank_unmatched)
+    draw_section("Duplicate Bot (sample)", dup_bot)
+
+    c.showPage()
+    c.save()
+    buf.seek(0)
+
+    await update.callback_query.message.reply_document(document=buf, filename="reconciliation_report.pdf", caption="🧾 Reconciliation Report (CBE)")
+    await update.callback_query.edit_message_text("✅ Reconciliation complete. Report sent.")
+
+async def download_last_report(update: Update):
+    await update.callback_query.edit_message_text("ℹ️ Reports are generated on demand after each run.")
