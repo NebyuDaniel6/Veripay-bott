@@ -773,6 +773,12 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     result_parts.append(f"- Time: {time_val}")
                 message_text = "\n".join(result_parts)
 
+            # Build keyboard for result message
+            if LEGACY_UI:
+                keyboard = build_payment_result_keyboard(user_id, user_languages)
+            else:
+                keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔎 View Full OCR", callback_data="view_full_ocr")]])
+
             await update.message.reply_text(
                 message_text,
                 reply_markup=keyboard
