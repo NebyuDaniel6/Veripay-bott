@@ -1,0 +1,258 @@
+import os
+import json
+import logging
+import re
+from typing import Optional, Dict, Any
+from google.cloud import vision
+from google.oauth2 import service_account
+
+# Bank-specific parsers
+# Prefer local imports; fall back to absolute to support both local and packaged runs
+try:
+    from ocr_parsers import dashen as dashen_parser  # local
+except Exception:
+    try:
+        from bot_v2.ocr_parsers import dashen as dashen_parser  # absolute
+    except Exception:
+        dashen_parser = None
+
+try:
+    from ocr_parsers import telebirr as telebirr_parser
+except Exception:
+    try:
+        from bot_v2.ocr_parsers import telebirr as telebirr_parser
+    except Exception:
+        telebirr_parser = None
+
+try:
+    from ocr_parsers import cbe as cbe_parser
+except Exception:
+    try:
+        from bot_v2.ocr_parsers import cbe as cbe_parser
+    except Exception:
+        cbe_parser = None
+
+try:
+    from ocr_parsers import abyssinia as abyssinia_parser
+except Exception:
+    try:
+        from bot_v2.ocr_parsers import abyssinia as abyssinia_parser
+    except Exception:
+        abyssinia_parser = None
+
+logger = logging.getLogger(__name__)
+
+class VisionOCR:
+    def __init__(self):
+        # Method 1: Create credentials file from environment variable JSON
+        creds_json = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS_JSON')
+        if creds_json:
+            try:
+                import tempfile
+                # Clean up the JSON string
+                creds_json = creds_json.strip()
+                # Remove all line breaks and extra whitespace to make it single-line
+                creds_json = "".join(creds_json.split())
+                # Add back necessary spaces after colons and commas
+                creds_json = creds_json.replace(":",": ").replace(",",", ")
+                # Parse JSON to validate it
+                creds_dict = json.loads(creds_json)
+                # Write to temporary file
+                with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as temp_file:
+                    json.dump(creds_dict, temp_file)
+                    temp_creds_path = temp_file.name
+                # Load credentials from temporary file
+                credentials = service_account.Credentials.from_service_account_file(temp_creds_path)
+                self.client = vision.ImageAnnotatorClient(credentials=credentials)
+                # Clean up
+                os.unlink(temp_creds_path)
+                logger.info("✅ Vision initialized from JSON environment variable via temp file")
+                return
+            except Exception as e:
+                logger.warning(f"❌ Failed to load credentials from JSON: {e}")
+        # Fallback to existing methods
+        # Method 1: Try JSON from environment variable first (most reliable)
+        creds_json = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS_JSON')
+        if creds_json:
+            try:
+                # Clean up the JSON string
+                creds_json = creds_json.strip()
+                # Remove all line breaks and extra whitespace to make it single-line
+                creds_json = "".join(creds_json.split())
+                # Add back necessary spaces after colons and commas
+                creds_json = creds_json.replace(":",": ").replace(",",", ")
+                creds_dict = json.loads(creds_json)
+                credentials = service_account.Credentials.from_service_account_info(creds_dict)
+                self.client = vision.ImageAnnotatorClient(credentials=credentials)
+                logger.info("✅ Vision initialized from JSON environment variable")
+                return
+            except Exception as e:
+                logger.warning(f"❌ Failed to load credentials from JSON: {e}")
+        # Fallback to existing methods
+        print("DEBUG: Starting VisionOCR initialization")
+        # Method 1: Try individual environment variables first
+        project_id = os.environ.get('GOOGLE_PROJECT_ID')
+        private_key_id = os.environ.get('GOOGLE_PRIVATE_KEY_ID')
+        private_key = os.environ.get('GOOGLE_PRIVATE_KEY')
+        client_email = os.environ.get('GOOGLE_CLIENT_EMAIL')
+        client_id = os.environ.get('GOOGLE_CLIENT_ID')
+        
+        if all([project_id, private_key_id, private_key, client_email, client_id]):
+            try:
+                # Fix private key formatting - ensure proper line breaks
+                if '\\n' in private_key:
+                    private_key = private_key.replace('\\n', '\n')
+                elif '\\\\n' in private_key:
+                    private_key = private_key.replace('\\\\n', '\n')
+                
+                # Ensure the private key has proper BEGIN/END markers
+                if not private_key.startswith('-----BEGIN PRIVATE KEY-----'):
+                    private_key = '-----BEGIN PRIVATE KEY-----\n' + private_key
+                if not private_key.endswith('-----END PRIVATE KEY-----\n'):
+                    if private_key.endswith('-----END PRIVATE KEY-----'):
+                        private_key = private_key + '\n'
+                    else:
+                        private_key = private_key + '\n-----END PRIVATE KEY-----\n'
+                
+                creds_dict = {
+                    "type": "service_account",
+                    "project_id": project_id,
+                    "private_key_id": private_key_id,
+                    "private_key": private_key,
+                    "client_email": client_email,
+                    "client_id": client_id,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+                    "client_x509_cert_url": f"https://www.googleapis.com/robot/v1/metadata/x509/{client_email.replace('@', '%40')}",
+                    "universe_domain": "googleapis.com"
+                }
+                credentials = service_account.Credentials.from_service_account_info(creds_dict)
+                self.client = vision.ImageAnnotatorClient(credentials=credentials)
+                logger.info("Vision initialized from individual environment variables")
+                return
+            except Exception as e:
+                logger.warning(f"Failed to load credentials from individual variables: {e}")
+        
+        # Fallback to existing methods...
+        
+        # Fallback to existing methods
+        # Try multiple methods to load credentials
+        
+        # Method 1: Base64 encoded JSON from environment variable
+        creds_b64 = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS_JSON')
+        if creds_b64:
+            try:
+                import base64
+                # Decode Base64 and clean up the JSON
+                creds_json = base64.b64decode(creds_b64).decode('utf-8')
+                # Remove any control characters that might cause issues
+                creds_json = ''.join(char for char in creds_json if ord(char) >= 32 or char in '\n\r\t')
+                creds_dict = json.loads(creds_json)
+                credentials = service_account.Credentials.from_service_account_info(creds_dict)
+                self.client = vision.ImageAnnotatorClient(credentials=credentials)
+                logger.info("Vision initialized from Base64 encoded environment variable")
+                return
+            except Exception as e:
+                logger.warning(f"Failed to load credentials from Base64 JSON: {e}")
+        
+        # Method 2: Direct JSON from environment variable
+        creds_json = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS_JSON')
+        if creds_json and not creds_b64:  # Only if it wasn't Base64
+            try:
+                # Clean up the JSON string
+                creds_json = creds_json.strip()
+                # Remove all line breaks and extra whitespace to make it single-line
+                creds_json = "".join(creds_json.split())
+                # Add back necessary spaces after colons and commas
+                creds_json = creds_json.replace(":",": ").replace(",",", ")
+                creds_dict = json.loads(creds_json)
+                credentials = service_account.Credentials.from_service_account_info(creds_dict)
+                self.client = vision.ImageAnnotatorClient(credentials=credentials)
+                logger.info("Vision initialized from direct JSON environment variable")
+                return
+            except Exception as e:
+                logger.warning(f"Failed to load credentials from direct JSON: {e}")
+        
+        # Method 3: File path fallback
+        creds_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', 'veripay-credentials.json')
+        try:
+            credentials = service_account.Credentials.from_service_account_file(creds_path)
+            self.client = vision.ImageAnnotatorClient(credentials=credentials)
+            logger.info("Vision initialized from file path")
+        except Exception as e:
+            logger.warning(f"Vision unavailable: {e}")
+            logger.info("Bot will continue without OCR functionality")
+            self.client = None
+        if creds_json:
+            try:
+                creds_dict = json.loads(creds_json)
+                credentials = service_account.Credentials.from_service_account_info(creds_dict)
+                self.client = vision.ImageAnnotatorClient(credentials=credentials)
+                logger.info("Vision initialized from environment variable JSON")
+                return
+            except Exception as e:
+                logger.warning(f"Failed to load credentials from JSON: {e}")
+        creds_path = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS', 'veripay-credentials.json')
+        try:
+            credentials = service_account.Credentials.from_service_account_file(creds_path)
+            self.client = vision.ImageAnnotatorClient(credentials=credentials)
+        except Exception as e:
+            logger.warning(f"Vision unavailable: {e}")
+            logger.info("Bot will continue without OCR functionality")
+            self.client = None
+
+    def _fallback_basic(self, text: str, bank_hint: Optional[str]) -> Dict[str, Any]:
+        data: Dict[str, Any] = {"raw_text": text}
+        bank = (bank_hint or "").lower()
+        if "telebirr" in bank or "telebirr" in text.lower():
+            data["bank"] = "Telebirr"
+        elif "dashen" in bank or "dashen" in text.lower():
+            data["bank"] = "Dashen Bank"
+        elif "abyssinia" in bank or "bank of abyssinia" in text.lower():
+            data["bank"] = "Bank of Abyssinia"
+        else:
+            data["bank"] = "Commercial Bank of Ethiopia" if ("cbe" in bank or "commercial bank of ethiopia" in text.lower()) else "Unknown"
+        return data
+
+    def extract(self, image_bytes: bytes, bank_hint: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        if not self.client:
+            return None
+        image = vision.Image(content=image_bytes)
+        response = self.client.text_detection(image=image)
+        texts = response.text_annotations or []
+        if not texts:
+            return None
+        full_text = texts[0].description
+        bank_l = (bank_hint or "").lower()
+
+        # Dispatch to bank-specific parser
+        try:
+            if "dashen" in bank_l and dashen_parser:
+                parsed = dashen_parser.extract_fields(full_text)
+            elif "telebirr" in bank_l and telebirr_parser:
+                parsed = telebirr_parser.extract_fields(full_text)
+            elif ("cbe" in bank_l or "commercial bank of ethiopia" in bank_l) and cbe_parser:
+                parsed = cbe_parser.extract_fields(full_text)
+            elif "abyssinia" in bank_l and abyssinia_parser:
+                parsed = abyssinia_parser.extract_fields(full_text)
+            else:
+                # Try lightweight auto-detect when hint is missing
+                auto = self._fallback_basic(full_text, bank_hint)
+                b = auto.get("bank", "").lower()
+                if "dashen" in b and dashen_parser:
+                    parsed = dashen_parser.extract_fields(full_text)
+                elif "telebirr" in b and telebirr_parser:
+                    parsed = telebirr_parser.extract_fields(full_text)
+                elif "abyssinia" in b and abyssinia_parser:
+                    parsed = abyssinia_parser.extract_fields(full_text)
+                elif "commercial bank of ethiopia" in b and cbe_parser:
+                    parsed = cbe_parser.extract_fields(full_text)
+                else:
+                    parsed = auto
+        except Exception as e:
+            logger.warning(f"Parser error for bank '{bank_hint}': {e}")
+            parsed = self._fallback_basic(full_text, bank_hint)
+
+        parsed["raw_text"] = full_text
+        return parsed

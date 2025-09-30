@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: veripay-bot-bg
+    env: python
+    plan: free
+    branch: deploy-fresh
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m bot_v2.app
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: SUPER_ADMIN_ID
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        value: /opt/render/project/src/veripay-credentials.json
+      - key: USE_WEBHOOK
+        value: 1
+      - key: PUBLIC_URL
+        sync: false
+      - key: PORT
+        value: 10000
+      - key: WEBHOOK_PATH
+        value: /webhook
+      - key: LEGACY_UI
+        value: 1
+      - key: PERSISTENCE_V1
+        value: 1

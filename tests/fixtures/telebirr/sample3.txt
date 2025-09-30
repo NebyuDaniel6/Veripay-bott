@@ -1,0 +1,5 @@
+Telebirr Payment
+Amount: 1,500.00 ETB
+To: John Doe
+Transaction Number: CH12345678
+Time: 2025/08/12 14:30:15
