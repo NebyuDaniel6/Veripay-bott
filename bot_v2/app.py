@@ -1703,3 +1703,4 @@ async def download_last_report(update: Update):
     """Download the last reconciliation report (placeholder)"""
     await update.callback_query.answer("📥 Last report download - feature coming soon!")
 
+# Force redeploy Tue Sep 30 19:39:56 EAT 2025
