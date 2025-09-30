@@ -1582,3 +1582,124 @@ if __name__ == "__main__":
     else:
         print("Starting polling mode")
         app.run_polling()
+
+async def run_reconciliation(update: Update):
+    """Run reconciliation between bot transactions and bank statement"""
+    try:
+        user_id = update.effective_user.id
+        restaurant = storage.get_restaurant_by_user_id(user_id)
+        if not restaurant:
+            await update.callback_query.answer("❌ Restaurant not found")
+            return
+        
+        # Get latest bank statement
+        statements = storage.list_bank_statements(restaurant['id'], "CBE", limit=1)
+        if not statements:
+            await update.callback_query.answer("❌ No bank statement uploaded. Please upload a statement first.")
+            return
+        
+        latest_statement = statements[0]
+        statement_lines = storage.list_bank_statement_lines(latest_statement['id'])
+        
+        if not statement_lines:
+            await update.callback_query.answer("❌ No transaction lines found in statement")
+            return
+        
+        # Get bot transactions for this restaurant
+        bot_transactions = storage.list_transactions_by_restaurant(restaurant['id'], limit=1000)
+        
+        # Simple reconciliation logic
+        matched = []
+        unmatched_bot = []
+        bank_unmatched = []
+        
+        # Create lookup maps
+        bot_refs = {}
+        for tx in bot_transactions:
+            ref = (tx.get('transaction_id') or tx.get('original_ref') or '').strip().upper()
+            if ref:
+                bot_refs[ref] = tx
+        
+        bank_refs = {}
+        for line in statement_lines:
+            ref = (line.get('reference') or '').strip().upper()
+            if ref:
+                bank_refs[ref] = line
+        
+        # Find matches
+        for ref, tx in bot_refs.items():
+            if ref in bank_refs:
+                matched.append((tx, bank_refs[ref]))
+            else:
+                unmatched_bot.append(tx)
+        
+        for ref, line in bank_refs.items():
+            if ref not in bot_refs:
+                bank_unmatched.append(line)
+        
+        # Generate PDF report
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib import colors
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet
+        import io
+        
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
+        styles = getSampleStyleSheet()
+        story = []
+        
+        story.append(Paragraph(f"Reconciliation Report - {restaurant.get('name','Restaurant')} (CBE)", styles['Heading2']))
+        story.append(Paragraph(f"Matched: {len(matched)} | Unmatched (Bot): {len(unmatched_bot)} | Unmatched (Bank): {len(bank_unmatched)}", styles['Normal']))
+        story.append(Spacer(1, 12))
+        
+        # Create table
+        matched_map = {tx.get('id'): ln for tx, ln in matched if tx.get('id') is not None}
+        rows = [["Date/Time", "Transaction Number", "Amount", "Status", "Matched Ref", "Matched Amount"]]
+        
+        for tx in bot_transactions:
+            tx_id = tx.get('id')
+            dt = tx.get('created_at') or f"{tx.get('transaction_date','')} {tx.get('transaction_time','')}".strip()
+            tx_ref = (tx.get('transaction_id') or tx.get('original_ref') or '').upper()
+            tx_amt = tx.get('amount') or ''
+            
+            if tx_id in matched_map:
+                ln = matched_map[tx_id]
+                rows.append([dt, tx_ref, tx_amt, "Matched", (ln.get('reference') or '').upper(), ln.get('credit_amount') or ''])
+            else:
+                rows.append([dt, tx_ref, tx_amt, "Unmatched", "", ""])
+        
+        # Add summary rows
+        rows += [["","","","","",""], 
+                ["Summary","Matched refs", str(len(matched)), "Matched amounts", str(len(matched)), ""],
+                ["","Unmatched refs", str(len(unmatched_bot)), "Unmatched amounts", str(len(unmatched_bot)), ""],
+                ["","Unmatched (Bank)", str(len(bank_unmatched)), "", "", ""]]
+        
+        table = Table(rows, repeatRows=1)
+        table.setStyle(TableStyle([
+            ('BACKGROUND',(0,0),(-1,0),colors.lightgrey),
+            ('GRID',(0,0),(-1,-1),0.25,colors.grey),
+            ('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),
+            ('ALIGN',(2,1),(2,-1),'RIGHT'),
+            ('ALIGN',(5,1),(5,-1),'RIGHT')
+        ]))
+        
+        story.append(table)
+        doc.build(story)
+        buf.seek(0)
+        
+        await update.callback_query.message.reply_document(
+            document=buf, 
+            filename="reconciliation_report.pdf", 
+            caption="🧾 Reconciliation Report (CBE)"
+        )
+        await update.callback_query.edit_message_text("✅ Reconciliation complete. Report sent.")
+        
+    except Exception as e:
+        logger.error(f"Reconciliation error: {e}")
+        await update.callback_query.answer("❌ Reconciliation failed")
+
+async def download_last_report(update: Update):
+    """Download the last reconciliation report (placeholder)"""
+    await update.callback_query.answer("📥 Last report download - feature coming soon!")
+
