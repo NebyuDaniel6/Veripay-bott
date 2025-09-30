@@ -1,0 +1,5 @@
+Transaction Time: 2025/08/12 13:23:22
+Transaction Type: Transfer Money
+Transaction To: Mekonen
+Transaction Number: CHC85KOLMU
+Amount: -7,008.00 (ETB)
