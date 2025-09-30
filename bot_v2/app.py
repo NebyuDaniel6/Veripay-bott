@@ -1587,7 +1587,7 @@ async def run_reconciliation(update: Update):
     """Run reconciliation between bot transactions and bank statement"""
     try:
         user_id = update.effective_user.id
-        restaurant = storage.get_restaurant_by_user_id(user_id)
+        restaurant = storage.get_restaurant_by_owner(user_id)
         if not restaurant:
             await update.callback_query.answer("❌ Restaurant not found")
             return
