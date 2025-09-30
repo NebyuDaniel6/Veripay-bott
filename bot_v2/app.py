@@ -1268,6 +1268,10 @@ async def show_restaurant_transactions(update: Update):
             text += f"👤 Waiter: {tx.get('waiter_name', 'Unknown')}\n"
             text += f"📅 Date: {tx.get('created_at', 'Unknown')}\n\n"
     
+    # Minimal back button without changing other flows
+    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Restaurant Admin", callback_data="back_to_restaurant_admin")]])
+    await update.callback_query.edit_message_text(text, reply_markup=keyboard)
+
 
 async def show_restaurant_settings(update: Update):
     """Show restaurant settings"""
