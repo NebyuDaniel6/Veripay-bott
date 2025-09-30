@@ -31,9 +31,10 @@ def parse(text: str) -> Dict[str, Any]:
     
     # Transaction Number patterns - be more specific
     transaction_patterns = [
-        r"Transaction\s+Number[:\s]+([A-Z0-9]{8,12})",  # Transaction Number: CHC85K0LMU
-        r"Transaction\s+ID[:\s]+([A-Z0-9]{8,12})",      # Transaction ID: CHC85K0LMU
-        r"Ref(?:erence)?\s+No[:\s]+([A-Z0-9]{8,12})",   # Ref No: CHC85K0LMU
+        r"Transaction\s+Number\s*[:\s]*\n?\s*(CH[A-Z0-9O]{7,})",
+        r"Transaction\s+ID\s*[:\s]*\n?\s*(CH[A-Z0-9O]{7,})",
+        r"Ref(?:erence)?\s+No\s*[:\s]*\n?\s*(CH[A-Z0-9O]{7,})",
+        r"\bCH[A-Z0-9O]{7,}\b",
     ]
     
     for pattern in transaction_patterns:
@@ -44,9 +45,9 @@ def parse(text: str) -> Dict[str, Any]:
     
     # Recipient/Sender patterns - be more specific and handle OCR variations
     recipient_patterns = [
-        r"Transaction\s+To[:\s]+([A-Za-z]+?)(?=\s*$|\s*\n|\s*Transaction|\s*Number)",  # Transaction To: Mekonen
-        r"To[:\s]+([A-Za-z]+?)(?=\s*$|\s*\n|\s*Transaction)",                         # To: Mekonen
-        r"Recipient[:\s]+([A-Za-z]+?)(?=\s*$|\s*\n|\s*Transaction)",                  # Recipient: Mekonen
+        r"Transaction\s+To\s*[:\s]*\n?\s*([A-Za-z][A-Za-z .'-]{0,40}?)(?=\s*$|\s*\n|\s*Transaction|\s*Number)",
+        r"To\s*[:\s]*\n?\s*([A-Za-z][A-Za-z .'-]{0,40}?)(?=\s*$|\s*\n|\s*Transaction)",
+        r"Recipient\s*[:\s]*\n?\s*([A-Za-z][A-Za-z .'-]{0,40}?)(?=\s*$|\s*\n|\s*Transaction)",
     ]
     
     for pattern in recipient_patterns:
