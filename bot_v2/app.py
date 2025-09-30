@@ -742,28 +742,39 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # Format result
             
-            result_parts = [
-                get_text(user_id, "captured", user_languages) if LEGACY_UI else "✅ Captured",
-                f"- Bank: {bank}",
-                f"- Amount: {amount} ETB" if amount != "Unknown" else "- Amount: Unknown",
-                f"- Sender: {sender}",
-            ]
-
-            # Show Transaction ID prominently
-            if ref:
-                result_parts.append(f"- Transaction ID: {ref}")
-
-            # Show time if available
-            if time_val and time_val != "Unknown":
-                result_parts.append(f"- Time: {time_val}")
             
-            if LEGACY_UI:
-                keyboard = build_payment_result_keyboard(user_id, user_languages)
+            # Telebirr-specific formatting
+            if (bank or '').lower().startswith('tele'):
+                # Sanitize sender; map to 'To'
+                to_val = sender
+                if not to_val or any(x in (to_val or '').lower() for x in ['transaction', 'number', 'download', 'share']):
+                    to_val = 'Unknown'
+                parts = [
+                    get_text(user_id, "captured", user_languages) if LEGACY_UI else "✅ Captured",
+                    f"- Bank: {bank}",
+                    f"- Amount: {amount} ETB" if amount != "Unknown" else "- Amount: Unknown",
+                ]
+                if ref:
+                    parts.append(f"- Transaction Number: {ref}")
+                parts.append(f"- To: {to_val}")
+                if time_val and time_val != "Unknown":
+                    parts.append(f"- Time: {time_val}")
+                message_text = "\n".join(parts)
             else:
-                keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔎 View Full OCR", callback_data="view_full_ocr")]])
-            
+                result_parts = [
+                    get_text(user_id, "captured", user_languages) if LEGACY_UI else "✅ Captured",
+                    f"- Bank: {bank}",
+                    f"- Amount: {amount} ETB" if amount != "Unknown" else "- Amount: Unknown",
+                    f"- Sender: {sender}",
+                ]
+                if ref:
+                    result_parts.append(f"- Transaction ID: {ref}")
+                if time_val and time_val != "Unknown":
+                    result_parts.append(f"- Time: {time_val}")
+                message_text = "\n".join(result_parts)
+
             await update.message.reply_text(
-                "\n".join(result_parts),
+                message_text,
                 reply_markup=keyboard
             )
             
