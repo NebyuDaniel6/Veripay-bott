@@ -1523,3 +1523,62 @@ async def handle_statement_document(update: Update, context: ContextTypes.DEFAUL
             await update.message.reply_text("⚠️ Parsed lines: 0. Please upload a CSV with headers Reference(s) and Credit, or try another PDF export.")
         else:
             await update.message.reply_text(f"✅ Statement stored. Parsed lines: {parsed}")
+
+def create_application(token: str):
+    app = ApplicationBuilder().token(token).build()
+    
+    # Add global error handler
+    app.add_error_handler(error_handler)
+    global storage, ocr
+    storage = Storage(os.environ.get("DATABASE_URL", "sqlite:///veripay_dev.db"))
+    ocr = VisionOCR()
+    
+    # Create database tables
+    storage.create_tables()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(handle_callback))
+    app.add_handler(MessageHandler(filters.PHOTO & ~filters.COMMAND, handle_photo))
+    app.add_handler(CommandHandler("menu", show_main_menu))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
+    app.add_handler(MessageHandler(filters.Document.ALL, handle_statement_document))
+    app.add_handler(CommandHandler("health", health))
+    app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_web_app_data))
+    
+    return app
+
+if __name__ == "__main__":
+    # Debug environment variables
+    print("=== ENVIRONMENT VARIABLES DEBUG ===")
+    use_webhook_val = os.environ.get("USE_WEBHOOK", "NOT_SET")
+    public_url_val = os.environ.get("PUBLIC_URL", "NOT_SET")
+    port_val = os.environ.get("PORT", "NOT_SET")
+    webhook_path_val = os.environ.get("WEBHOOK_PATH", "NOT_SET")
+    bot_token_val = os.environ.get("BOT_TOKEN", "NOT_SET")
+    if bot_token_val != "NOT_SET":
+        bot_token_val = bot_token_val[:10] + "..."
+    print(f"USE_WEBHOOK: {repr(use_webhook_val)}")
+    print(f"PUBLIC_URL: {repr(public_url_val)}")
+    print(f"PORT: {repr(port_val)}")
+    print(f"WEBHOOK_PATH: {repr(webhook_path_val)}")
+    print(f"BOT_TOKEN: {repr(bot_token_val)}")
+    print("=== END DEBUG ===")
+    logging.basicConfig(level=logging.INFO)
+    token = os.environ.get("BOT_TOKEN")
+    if not token:
+        raise ValueError("BOT_TOKEN environment variable is required")
+    app = create_application(token)
+    print("Bot is running! Press Ctrl+C to stop.")
+    use_webhook = os.environ.get("USE_WEBHOOK", "0") == "1"
+    print(f"use_webhook evaluated to: {use_webhook}")
+    if use_webhook:
+        public_url = os.environ.get("PUBLIC_URL")
+        webhook_path = os.environ.get("WEBHOOK_PATH", "/webhook")
+        port = int(os.environ.get("PORT", "10000"))
+        if not public_url:
+            raise ValueError("PUBLIC_URL must be set when USE_WEBHOOK=1")
+        print(f"Starting webhook mode on port {port} with URL {public_url}{webhook_path}")
+        app.run_webhook(listen="0.0.0.0", port=port, url_path=webhook_path, webhook_url=f"{public_url}{webhook_path}")
+    else:
+        print("Starting polling mode")
+        app.run_polling()
