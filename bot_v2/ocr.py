@@ -68,7 +68,7 @@ class VisionOCR:
 
     def _fallback_basic(self, text: str, bank_hint: Optional[str]) -> Dict[str, Any]:
         data: Dict[str, Any] = {"raw_text": text}
-        bank_hint_l = (bank_hint or "").lower()
+        hint_l = (bank_hint or "").lower()
         text_l = text.lower()
         if "telebirr" in bank_hint_l or "telebirr" in text_l:
             data["bank"] = "Telebirr"
@@ -163,8 +163,9 @@ class VisionOCR:
             return {"ok": False, "error": "no_text", "message": "OCR failed"}
 
         lower = text.lower()
+        hint_l = (bank_hint or "").lower()
         # Prefer bank-specific parsers if available
-        if "telebirr" in lower and telebirr_parser:
+        if (("telebirr" in lower) or ("telebirr" in hint_l)) and telebirr_parser:
             try:
                 parsed = telebirr_parser.parse(text)
                 parsed["raw_text"] = text
