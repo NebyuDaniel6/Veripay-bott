@@ -70,13 +70,13 @@ class VisionOCR:
         data: Dict[str, Any] = {"raw_text": text}
         hint_l = (bank_hint or "").lower()
         text_l = text.lower()
-        if "telebirr" in bank_hint_l or "telebirr" in text_l:
+        if "telebirr" in hint_l or "telebirr" in text_l:
             data["bank"] = "Telebirr"
-        elif "dashen" in bank_hint_l or "dashen" in text_l:
+        elif "dashen" in hint_l or "dashen" in text_l:
             data["bank"] = "Dashen Bank"
-        elif "abyssinia" in bank_hint_l or "abyssinia" in text_l:
+        elif "abyssinia" in hint_l or "abyssinia" in text_l:
             data["bank"] = "Bank of Abyssinia"
-        elif "cbe" in bank_hint_l or "commercial bank" in text_l or "commercial bank of ethiopia" in text_l:
+        elif "cbe" in hint_l or "commercial bank" in text_l or "commercial bank of ethiopia" in text_l:
             data["bank"] = "Commercial Bank of Ethiopia"
         else:
             data["bank"] = "Unknown"
