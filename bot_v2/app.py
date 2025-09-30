@@ -1355,61 +1355,7 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
         # Last-resort guard
         pass
 
-def create_application(token: str):
-    app = ApplicationBuilder().token(token).build()
-    
-    # Add handlers
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("menu", menu))
-    app.add_handler(CommandHandler("health", health))
-    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-    app.add_handler(CallbackQueryHandler(handle_callback))
-    app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_web_app_data))
-    
-    if LEGACY_UI:
-        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
-
-    # Register statement document handler (PDF and CSV)
-    app.add_handler(MessageHandler((filters.Document.PDF | filters.Document.FileExtension("csv")), handle_statement_document))
-
-    # Register global error handler
-    app.add_error_handler(error_handler)
-
-    return app
-
-if __name__ == "__main__":
-    # Start health server for keep-alive
-    logging.basicConfig(level=logging.INFO)
-    token = os.environ.get("BOT_TOKEN")
-    if not token:
-        raise ValueError("BOT_TOKEN environment variable is required")
-
-    use_webhook = os.environ.get("USE_WEBHOOK", "0") == "1"
-    public_url = os.environ.get("PUBLIC_URL", "").strip()
-    webhook_path = os.environ.get("WEBHOOK_PATH", "/webhook").strip() or "/webhook"
-    port_str = os.environ.get("PORT", "10000").strip()
-    try:
-        port = int(port_str)
-    except ValueError:
-        port = 10000
-
-    app = create_application(token)
-
-    if use_webhook and public_url:
-        # Webhook mode for Render
-        print(f"Starting webhook mode on port {port} with URL {public_url}{webhook_path}")
-        app.run_webhook(
-            listen="0.0.0.0",
-            port=port,
-            url_path=webhook_path,
-            webhook_url=f"{public_url}{webhook_path}",
-        )
-    else:
-        # Local development polling
-        print("Starting polling mode (USE_WEBHOOK=0 or PUBLIC_URL missing)")
-        app.run_polling()
-
-
+# Reconciliation handlers (defined early to avoid NameError during registration)
 async def start_statement_upload(update: Update):
     user_id = update.callback_query.from_user.id
     restaurant = storage.get_restaurant_by_owner(user_id)
@@ -1573,3 +1519,57 @@ async def run_reconciliation(update: Update):
 
 async def download_last_report(update: Update):
     await update.callback_query.edit_message_text("ℹ️ Reports are generated on demand after each run.")
+
+def create_application(token: str):
+    app = ApplicationBuilder().token(token).build()
+    
+    # Add handlers
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("menu", menu))
+    app.add_handler(CommandHandler("health", health))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    app.add_handler(CallbackQueryHandler(handle_callback))
+    app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_web_app_data))
+    
+    if LEGACY_UI:
+        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
+
+    # Register statement document handler (PDF and CSV)
+    app.add_handler(MessageHandler((filters.Document.PDF | filters.Document.FileExtension("csv")), handle_statement_document))
+
+    # Register global error handler
+    app.add_error_handler(error_handler)
+
+    return app
+
+if __name__ == "__main__":
+    # Start health server for keep-alive
+    logging.basicConfig(level=logging.INFO)
+    token = os.environ.get("BOT_TOKEN")
+    if not token:
+        raise ValueError("BOT_TOKEN environment variable is required")
+
+    use_webhook = os.environ.get("USE_WEBHOOK", "0") == "1"
+    public_url = os.environ.get("PUBLIC_URL", "").strip()
+    webhook_path = os.environ.get("WEBHOOK_PATH", "/webhook").strip() or "/webhook"
+    port_str = os.environ.get("PORT", "10000").strip()
+    try:
+        port = int(port_str)
+    except ValueError:
+        port = 10000
+
+    app = create_application(token)
+
+    if use_webhook and public_url:
+        # Webhook mode for Render
+        print(f"Starting webhook mode on port {port} with URL {public_url}{webhook_path}")
+        app.run_webhook(
+            listen="0.0.0.0",
+            port=port,
+            url_path=webhook_path,
+            webhook_url=f"{public_url}{webhook_path}",
+        )
+    else:
+        # Local development polling
+        print("Starting polling mode (USE_WEBHOOK=0 or PUBLIC_URL missing)")
+        app.run_polling()
