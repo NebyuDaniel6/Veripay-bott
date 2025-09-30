@@ -114,9 +114,10 @@ class VisionOCR:
             if telebirr_time:
                 data["time"] = telebirr_time.group(1)
         ref_patterns = [
-            r"(?:Ref(?:erence)?\s*(?:No\.?|#)?\s*[:\-]?\s*)([A-Za-z0-9\-]{5,})",
-            r"(?:Txn(?:\s*ID)?|Transaction(?:\s*ID)?)\s*[:\-]?\s*([A-Za-z0-9\-]{5,})",
-            r"(?:Receipt\s*(?:No\.|#)?)\s*[:\-]?\s*([A-Za-z0-9\-]{5,})"
+            r"Ref(?:erence)?\s*(?:No\.?|#)?\s*[:#\-]\s*(?:\r?\n)?\s*([A-Za-z0-9\-]{5,})",
+            r"Transaction\s+ID\s*[:#\-]\s*(?:\r?\n)?\s*([A-Za-z0-9\-]{5,})",
+            r"Transaction\s+Number\s*[:#\-]\s*(?:\r?\n)?\s*([A-Za-z0-9\-]{5,})",
+            r"Receipt\s*(?:No\.?|#)?\s*[:#\-]\s*(?:\r?\n)?\s*([A-Za-z0-9\-]{5,})"
         ]
         for pat in ref_patterns:
             m = re.search(pat, text, re.IGNORECASE)
