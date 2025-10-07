@@ -297,6 +297,20 @@ class Storage:
         )
         return [dict(r) for r in cur.fetchall()]
 
+    def count_transactions_by_waiter(self, waiter_id: int) -> int:
+        """Count total transactions for a waiter"""
+        cur = self.conn.cursor()
+        cur.execute("SELECT COUNT(*) as count FROM transactions WHERE waiter_id = ?", (waiter_id,))
+        row = cur.fetchone()
+        return row['count'] if row else 0
+
+    def count_transactions_by_restaurant(self, restaurant_id: int) -> int:
+        """Count total transactions for a restaurant"""
+        cur = self.conn.cursor()
+        cur.execute("SELECT COUNT(*) as count FROM transactions WHERE restaurant_id = ?", (restaurant_id,))
+        row = cur.fetchone()
+        return row['count'] if row else 0
+
     # ----------------------
     # Sessions
     # ----------------------

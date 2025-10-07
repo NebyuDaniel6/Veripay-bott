@@ -1178,14 +1178,18 @@ async def handle_waiter_action(update: Update, action: str):
     if action == "waiter_capture_payment":
         await start_payment_capture(update)
     elif action == "waiter_transactions":
-        await show_waiter_transactions(update)
+        await show_waiter_transactions(update, page=0)
+    elif action.startswith("tx_page_"):
+        # Handle pagination
+        page = int(action.split("_")[-1])
+        await show_waiter_transactions(update, page=page)
     elif action == "waiter_help":
         await show_waiter_help(update)
     else:
         await update.callback_query.edit_message_text("👤 Waiter feature coming soon...")
 
-async def show_waiter_transactions(update: Update):
-    """Show waiter transaction history"""
+async def show_waiter_transactions(update: Update, page: int = 0):
+    """Show waiter transaction history with pagination"""
     user_id = update.callback_query.from_user.id
     
     # Get waiter ID for this user
@@ -1194,20 +1198,37 @@ async def show_waiter_transactions(update: Update):
         await update.callback_query.edit_message_text("❌ Waiter profile not found.")
         return
     
+    PAGE_SIZE = 20
+    offset = page * PAGE_SIZE
+    
     # Get transactions for this waiter
-    transactions = storage.list_transactions_by_waiter(waiter['id'], limit=20)
+    transactions = storage.list_transactions_by_waiter(waiter['id'], limit=PAGE_SIZE, offset=offset)
+    total_count = storage.count_transactions_by_waiter(waiter['id'])
     
     if not transactions:
         text = "📒 **My Transactions**\n\nNo transactions found yet. Start capturing payments to see your transaction history here."
     else:
-        text = f"📒 **My Transactions**\n\n**Recent Transactions:**\n\n"
-        for tx in transactions[:10]:  # Show last 10
+        text = f"📒 **My Transactions**\n\n"
+        text += f"**Page {page+1} of {(total_count + PAGE_SIZE - 1) // PAGE_SIZE}**\n"
+        text += f"**Total: {total_count} transactions**\n\n"
+        for tx in transactions:
             text += f"💰 **{tx.get('amount', 'N/A')} ETB**\n"
-            text += f"🏦 Bank: {tx.get('bank_name', 'Unknown')}\n"
+            text += f"🏦 Bank: {tx.get('bank', 'Unknown')}\n"
             text += f"📅 Date: {tx.get('created_at', 'Unknown')}\n"
-            text += f"📄 Receipt: {tx.get('receipt_number', 'N/A')}\n\n"
+            text += f"📄 Ref: {tx.get('original_ref', tx.get('transaction_id', 'N/A'))}\n\n"
     
-    keyboard = [[InlineKeyboardButton("🔙 Back to Waiter Menu", callback_data="back_to_waiter")]]
+    # Pagination navigation
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton("⬅️ Prev", callback_data=f"tx_page_{page-1}"))
+    if len(transactions) == PAGE_SIZE:
+        nav.append(InlineKeyboardButton("➡️ Next", callback_data=f"tx_page_{page+1}"))
+    
+    keyboard = []
+    if nav:
+        keyboard.append(nav)
+    keyboard.append([InlineKeyboardButton("🔙 Back to Waiter Menu", callback_data="back_to_waiter")])
+    
     await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 
 async def show_waiter_help(update: Update):
@@ -1294,7 +1315,11 @@ async def handle_restaurant_admin_action(update: Update, action: str):
     if action == "restaurant_manage_waiters":
         await show_waiter_management(update)
     elif action == "restaurant_transactions":
-        await show_restaurant_transactions(update)
+        await show_restaurant_transactions(update, page=0)
+    elif action.startswith("restaurant_tx_page_"):
+        # Handle pagination
+        page = int(action.split("_")[-1])
+        await show_restaurant_transactions(update, page=page)
     elif action == "restaurant_settings":
         await show_restaurant_settings(update)
     elif action == "restaurant_reconciliation":
@@ -1308,8 +1333,8 @@ async def handle_restaurant_admin_action(update: Update, action: str):
     else:
         await update.callback_query.edit_message_text("🏪 Restaurant Admin feature coming soon...")
 
-async def show_restaurant_transactions(update: Update):
-    """Show restaurant transaction history"""
+async def show_restaurant_transactions(update: Update, page: int = 0):
+    """Show restaurant transaction history with pagination"""
     user_id = update.callback_query.from_user.id
     
     # Get restaurant ID for this admin
@@ -1318,22 +1343,38 @@ async def show_restaurant_transactions(update: Update):
         await update.callback_query.edit_message_text("❌ Restaurant not found.")
         return
     
+    PAGE_SIZE = 20
+    offset = page * PAGE_SIZE
+    
     # Get transactions for this restaurant
-    transactions = storage.list_transactions_by_restaurant(restaurant['id'], limit=20)
+    transactions = storage.list_transactions_by_restaurant(restaurant['id'], limit=PAGE_SIZE, offset=offset)
+    total_count = storage.count_transactions_by_restaurant(restaurant['id'])
     
     if not transactions:
         text = "📒 **Restaurant Transactions**\n\nNo transactions found for your restaurant yet."
     else:
-        text = f"📒 **Restaurant Transactions**\n\n**Recent Transactions:**\n\n"
-        for tx in transactions[:10]:  # Show last 10
+        text = f"📒 **Restaurant Transactions**\n\n"
+        text += f"**Page {page+1} of {(total_count + PAGE_SIZE - 1) // PAGE_SIZE}**\n"
+        text += f"**Total: {total_count} transactions**\n\n"
+        for tx in transactions:
             text += f"💰 **{tx.get('amount', 'N/A')} ETB**\n"
-            text += f"🏦 Bank: {tx.get('bank_name', 'Unknown')}\n"
-            text += f"👤 Waiter: {tx.get('waiter_name', 'Unknown')}\n"
+            text += f"🏦 Bank: {tx.get('bank', 'Unknown')}\n"
+            text += f"👤 Waiter ID: {tx.get('waiter_id', 'Unknown')}\n"
             text += f"📅 Date: {tx.get('created_at', 'Unknown')}\n\n"
     
-    # Minimal back button without changing other flows
-    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back to Restaurant Admin", callback_data="back_to_restaurant_admin")]])
-    await update.callback_query.edit_message_text(text, reply_markup=keyboard)
+    # Pagination navigation
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton("⬅️ Prev", callback_data=f"restaurant_tx_page_{page-1}"))
+    if len(transactions) == PAGE_SIZE:
+        nav.append(InlineKeyboardButton("➡️ Next", callback_data=f"restaurant_tx_page_{page+1}"))
+    
+    keyboard = []
+    if nav:
+        keyboard.append(nav)
+    keyboard.append([InlineKeyboardButton("🔙 Back to Restaurant Admin", callback_data="back_to_restaurant_admin")])
+    
+    await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 
 
 async def show_restaurant_settings(update: Update):
