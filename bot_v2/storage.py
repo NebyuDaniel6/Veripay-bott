@@ -148,6 +148,14 @@ class Storage:
         c.execute("CREATE INDEX IF NOT EXISTS idx_tx_restaurant_id ON transactions(restaurant_id);")
         c.execute("CREATE INDEX IF NOT EXISTS idx_tx_waiter_id ON transactions(waiter_id);")
         c.execute("CREATE INDEX IF NOT EXISTS idx_tx_created_at ON transactions(created_at);")
+        
+        # Add archived column if it doesn't exist (for weekly reset feature)
+        try:
+            c.execute("ALTER TABLE transactions ADD COLUMN archived INTEGER DEFAULT 0")
+            c.execute("ALTER TABLE transactions ADD COLUMN archived_at TIMESTAMP")
+            self.conn.commit()
+        except Exception:
+            pass  # Column already exists
 
         # approvals
         c.execute(
@@ -296,27 +304,40 @@ class Storage:
         row = cur.fetchone()
         return dict(row) if row else None
 
-    def list_transactions_by_waiter(self, waiter_id: int, limit: int = 10, offset: int = 0) -> List[Dict[str, Any]]:
+    def list_transactions_by_waiter(self, waiter_id: int, limit: int = 10, offset: int = 0, include_archived: bool = False) -> List[Dict[str, Any]]:
         cur = self.conn.cursor()
+        archived_filter = "" if include_archived else " AND (archived IS NULL OR archived = 0)"
         cur.execute(
-            "SELECT * FROM transactions WHERE waiter_id = ? ORDER BY id DESC LIMIT ? OFFSET ?",
+            f"SELECT * FROM transactions WHERE waiter_id = ?{archived_filter} ORDER BY id DESC LIMIT ? OFFSET ?",
             (waiter_id, limit, offset),
         )
         return [dict(r) for r in cur.fetchall()]
 
-    def count_transactions_by_waiter(self, waiter_id: int) -> int:
+    def count_transactions_by_waiter(self, waiter_id: int, include_archived: bool = False) -> int:
         """Count total transactions for a waiter"""
         cur = self.conn.cursor()
-        cur.execute("SELECT COUNT(*) as count FROM transactions WHERE waiter_id = ?", (waiter_id,))
+        archived_filter = "" if include_archived else " AND (archived IS NULL OR archived = 0)"
+        cur.execute(f"SELECT COUNT(*) as count FROM transactions WHERE waiter_id = ?{archived_filter}", (waiter_id,))
         row = cur.fetchone()
         return row['count'] if row else 0
 
-    def count_transactions_by_restaurant(self, restaurant_id: int) -> int:
+    def count_transactions_by_restaurant(self, restaurant_id: int, include_archived: bool = False) -> int:
         """Count total transactions for a restaurant"""
         cur = self.conn.cursor()
-        cur.execute("SELECT COUNT(*) as count FROM transactions WHERE restaurant_id = ?", (restaurant_id,))
+        archived_filter = "" if include_archived else " AND (archived IS NULL OR archived = 0)"
+        cur.execute(f"SELECT COUNT(*) as count FROM transactions WHERE restaurant_id = ?{archived_filter}", (restaurant_id,))
         row = cur.fetchone()
         return row['count'] if row else 0
+    
+    def archive_restaurant_transactions(self, restaurant_id: int) -> int:
+        """Archive all active transactions for a restaurant (weekly reset)"""
+        cur = self.conn.cursor()
+        cur.execute(
+            "UPDATE transactions SET archived = 1, archived_at = CURRENT_TIMESTAMP WHERE restaurant_id = ? AND (archived IS NULL OR archived = 0)",
+            (restaurant_id,)
+        )
+        self.conn.commit()
+        return cur.rowcount
 
     # ----------------------
     # Sessions
@@ -530,15 +551,16 @@ class Storage:
         )
         row = cur.fetchone()
         return dict(row) if row else None
-    def list_transactions_by_restaurant(self, restaurant_id: int, limit: int = 10, offset: int = 0) -> List[Dict[str, Any]]:
+    def list_transactions_by_restaurant(self, restaurant_id: int, limit: int = 10, offset: int = 0, include_archived: bool = False) -> List[Dict[str, Any]]:
         """List transactions for a specific restaurant"""
         cur = self.conn.cursor()
+        archived_filter = "" if include_archived else " AND (t.archived IS NULL OR t.archived = 0)"
         cur.execute(
-            """
+            f"""
             SELECT t.*, u.username as waiter_name 
             FROM transactions t
             LEFT JOIN users u ON t.waiter_id = u.id
-            WHERE t.restaurant_id = ?
+            WHERE t.restaurant_id = ?{archived_filter}
             ORDER BY t.id DESC 
             LIMIT ? OFFSET ?
             """,

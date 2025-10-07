@@ -1743,8 +1743,95 @@ async def run_reconciliation(update: Update):
         await update.callback_query.answer("❌ Reconciliation failed")
 
 async def download_last_report(update: Update):
-    """Download the last reconciliation report (placeholder)"""
-    await update.callback_query.answer("📥 Last report download - feature coming soon!")
+    """Download weekly report and archive transactions"""
+    try:
+        user_id = update.effective_user.id
+        restaurant = storage.get_restaurant_by_owner(user_id)
+        if not restaurant:
+            await update.callback_query.answer("❌ Restaurant not found")
+            return
+        
+        # Get all active (non-archived) transactions
+        transactions = storage.list_transactions_by_restaurant(restaurant['id'], limit=10000, include_archived=False)
+        
+        if not transactions:
+            await update.callback_query.answer("❌ No active transactions to export")
+            return
+        
+        # Generate weekly report PDF
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib import colors
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet
+        from datetime import datetime
+        import io
+        
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
+        styles = getSampleStyleSheet()
+        story = []
+        
+        story.append(Paragraph(f"Weekly Report - {restaurant.get('name','Restaurant')}", styles['Heading1']))
+        story.append(Paragraph(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", styles['Normal']))
+        story.append(Paragraph(f"Total Transactions: {len(transactions)}", styles['Normal']))
+        story.append(Spacer(1, 20))
+        
+        # Calculate totals
+        total_amount = sum(float(tx.get('amount', 0) or 0) for tx in transactions)
+        story.append(Paragraph(f"**Total Amount: {total_amount:.2f} ETB**", styles['Heading3']))
+        story.append(Spacer(1, 12))
+        
+        # Transaction table
+        rows = [["Date", "Tx Number", "Amount (ETB)", "Waiter", "Bank"]]
+        for tx in transactions:
+            dt = tx.get('created_at', 'N/A')
+            tx_ref = tx.get('transaction_id') or tx.get('original_ref') or 'N/A'
+            amount = tx.get('amount', 'N/A')
+            
+            # Get waiter info
+            waiter_info = "Unknown"
+            if tx.get('waiter_id'):
+                waiter = storage.get_waiter_by_id(tx['waiter_id'])
+                if waiter and waiter.get('user_id'):
+                    user = storage.get_user_by_id(waiter['user_id'])
+                    if user:
+                        waiter_info = user.get('full_name') or user.get('username') or f"W{waiter['id']}"
+            
+            bank = tx.get('bank', 'N/A')
+            rows.append([dt[:16] if dt else 'N/A', tx_ref, amount, waiter_info, bank])
+        
+        table = Table(rows, repeatRows=1)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.lightblue),
+            ('GRID', (0,0), (-1,-1), 0.25, colors.grey),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('ALIGN', (2,1), (2,-1), 'RIGHT'),
+        ]))
+        story.append(table)
+        
+        doc.build(story)
+        buf.seek(0)
+        
+        # Send the report
+        await update.callback_query.message.reply_document(
+            document=buf,
+            filename=f"weekly_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+            caption=f"📊 Weekly Report\n\n✅ {len(transactions)} transactions\n💰 Total: {total_amount:.2f} ETB\n\n⚠️ These transactions will be archived after download."
+        )
+        
+        # Archive the transactions
+        archived_count = storage.archive_restaurant_transactions(restaurant['id'])
+        
+        await update.callback_query.edit_message_text(
+            f"✅ Weekly report generated!\n\n"
+            f"📄 {len(transactions)} transactions exported\n"
+            f"📦 {archived_count} transactions archived\n\n"
+            f"You can now start fresh for the new week! 🎉"
+        )
+        
+    except Exception as e:
+        logger.error(f"Weekly report error: {e}")
+        await update.callback_query.answer("❌ Report generation failed")
 
 if __name__ == "__main__":
     # Debug environment variables
@@ -1781,10 +1868,5 @@ if __name__ == "__main__":
     else:
         print("Starting polling mode")
         app.run_polling()
-
-# duplicate removed; function moved above main
-async def download_last_report(update: Update):
-    """Download the last reconciliation report (placeholder)"""
-    await update.callback_query.answer("📥 Last report download - feature coming soon!")
 
 # Force redeploy Tue Sep 30 19:39:56 EAT 2025
