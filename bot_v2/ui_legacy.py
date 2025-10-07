@@ -122,11 +122,10 @@ def build_language_selection_keyboard() -> InlineKeyboardMarkup:
 def build_main_menu_keyboard(user_id: int, user_languages: Dict[int, str]) -> InlineKeyboardMarkup:
     """Build main registration menu keyboard"""
     keyboard = [
+        [InlineKeyboardButton("🔑 Login", callback_data="login")],
         [InlineKeyboardButton(get_text(user_id, "register_restaurant", user_languages), callback_data="register_restaurant")],
         [InlineKeyboardButton(get_text(user_id, "register_waiter", user_languages), callback_data="register_waiter")],
         [InlineKeyboardButton(get_text(user_id, "help", user_languages), callback_data="help")],
-        [InlineKeyboardButton("🔓 Logout", callback_data="logout")],
-        [InlineKeyboardButton("🔓 Logout", callback_data="logout")],
         [InlineKeyboardButton(get_text(user_id, "language", user_languages), callback_data="change_language")]
     ]
     return InlineKeyboardMarkup(keyboard)

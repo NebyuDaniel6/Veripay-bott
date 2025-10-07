@@ -203,6 +203,58 @@ async def handle_logout(update: Update):
     # Show main menu for re-registration
     await show_main_menu(update)
 
+async def handle_login(update: Update):
+    """Handle login - restore user session from database"""
+    user_id = update.effective_user.id
+    username = update.effective_user.username or "Unknown"
+    super_admin_id = int(os.environ.get("SUPER_ADMIN_ID", "0") or 0)
+    
+    # Check if user exists in database
+    db_user = storage.get_user_by_telegram(user_id)
+    
+    if not db_user:
+        # User not found in database
+        await update.callback_query.answer("❌ No account found. Please register first.", show_alert=True)
+        return
+    
+    # Get user role
+    role = db_user.get('role', 'NEW_USER')
+    
+    # Prevent login if user hasn't completed registration
+    if role == 'NEW_USER':
+        await update.callback_query.answer("❌ Please complete registration first.", show_alert=True)
+        return
+    
+    # Restore user to memory
+    try:
+        user_role = getattr(UserRole, role, UserRole.NEW_USER)
+    except (KeyError, AttributeError):
+        user_role = UserRole.NEW_USER
+    
+    users[user_id] = {
+        'id': user_id,
+        'username': username,
+        'role': user_role,
+        'restaurant_id': None,
+        'waiter_id': None,
+        'created_at': None
+    }
+    user_languages[user_id] = db_user.get('language', 'en')
+    user_states[user_id] = UserState.IDLE
+    
+    # Route to appropriate dashboard based on role
+    if role == 'SUPER_ADMIN' or user_id == super_admin_id:
+        await setup_persistent_keyboard(update, user_id, 'SUPER_ADMIN')
+        await update.callback_query.answer("✅ Logged in as Super Admin", show_alert=False)
+    elif role == 'RESTAURANT_ADMIN':
+        await setup_persistent_keyboard(update, user_id, 'RESTAURANT_ADMIN')
+        await update.callback_query.answer("✅ Logged in as Restaurant Admin", show_alert=False)
+    elif role == 'WAITER':
+        await setup_persistent_keyboard(update, user_id, 'WAITER')
+        await update.callback_query.answer("✅ Logged in as Waiter", show_alert=False)
+    else:
+        await update.callback_query.answer("❌ Invalid role. Please contact support.", show_alert=True)
+
 async def show_language_selection(update: Update):
     """Show language selection menu"""
     keyboard = build_language_selection_keyboard()
@@ -334,6 +386,11 @@ async def handle_legacy_callback(update: Update, context: ContextTypes.DEFAULT_T
             await show_super_admin_menu(update)
         else:
             await show_main_menu(update)
+        return
+    
+    # Login
+    if data == "login":
+        await handle_login(update)
         return
     
     # Change language
