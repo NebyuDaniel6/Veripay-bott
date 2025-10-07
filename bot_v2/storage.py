@@ -217,6 +217,13 @@ class Storage:
         row = cur.fetchone()
         return dict(row) if row else None
 
+    def get_user_by_id(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """Get user by internal user ID"""
+        cur = self.conn.cursor()
+        cur.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+        row = cur.fetchone()
+        return dict(row) if row else None
+
     def set_user_language(self, telegram_id: int, language: str) -> None:
         cur = self.conn.cursor()
         cur.execute("UPDATE users SET language = ?, updated_at=CURRENT_TIMESTAMP WHERE telegram_id = ?", (language, telegram_id))

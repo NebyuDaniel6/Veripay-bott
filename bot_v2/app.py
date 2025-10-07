@@ -1698,21 +1698,33 @@ async def run_reconciliation(update: Update):
         story.append(Paragraph(f"Matched: {len(matched)} | Unmatched (Bot): {len(unmatched_bot)} | Unmatched (Bank): {len(bank_unmatched)}", styles['Normal']))
         story.append(Spacer(1, 12))
         matched_map = {tx.get('id'): ln for tx, ln in matched if tx.get('id') is not None}
-        rows = [["Date/Time", "Transaction Number", "Amount", "Status", "Matched Ref", "Matched Amount"]]
+        rows = [["Date/Time", "Transaction Number", "Amount", "Waiter", "Status", "Matched Ref", "Matched Amount"]]
         for tx in bot_transactions:
             tx_id = tx.get('id')
             dt = tx.get('created_at') or f"{tx.get('transaction_date','')} {tx.get('transaction_time','')}".strip()
             tx_ref = (tx.get('transaction_id') or tx.get('original_ref') or '').upper()
             tx_amt = tx.get('amount') or ''
+            
+            # Get waiter information
+            waiter_info = "Unknown"
+            if tx.get('waiter_id'):
+                waiter = storage.get_waiter_by_id(tx['waiter_id'])
+                if waiter and waiter.get('user_id'):
+                    user = storage.get_user_by_id(waiter['user_id'])
+                    if user:
+                        waiter_info = user.get('full_name') or user.get('username') or f"W{waiter['id']}"
+                    else:
+                        waiter_info = f"W{waiter['id']}"
+            
             if tx_id in matched_map:
                 ln = matched_map[tx_id]
-                rows.append([dt, tx_ref, tx_amt, "Matched", (ln.get('reference') or '').upper(), ln.get('credit_amount') or ''])
+                rows.append([dt, tx_ref, tx_amt, waiter_info, "Matched", (ln.get('reference') or '').upper(), ln.get('credit_amount') or ''])
             else:
-                rows.append([dt, tx_ref, tx_amt, "Unmatched", "", ""])
-        rows += [["","","","","",""], 
-                 ["Summary","Matched refs", str(len(matched)), "Matched amounts", str(len(matched)), ""],
-                 ["","Unmatched refs", str(len(unmatched_bot)), "Unmatched amounts", str(len(unmatched_bot)), ""],
-                 ["","Unmatched (Bank)", str(len(bank_unmatched)), "", "", ""]]
+                rows.append([dt, tx_ref, tx_amt, waiter_info, "Unmatched", "", ""])
+        rows += [["","","","","","",""], 
+                 ["Summary","Matched refs", str(len(matched)), "", "Matched amounts", str(len(matched)), ""],
+                 ["","Unmatched refs", str(len(unmatched_bot)), "", "Unmatched amounts", str(len(unmatched_bot)), ""],
+                 ["","Unmatched (Bank)", str(len(bank_unmatched)), "", "", "", ""]]
         table = Table(rows, repeatRows=1)
         table.setStyle(TableStyle([
             ('BACKGROUND',(0,0),(-1,0),colors.lightgrey),
