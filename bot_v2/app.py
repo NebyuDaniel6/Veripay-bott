@@ -1330,6 +1330,51 @@ async def handle_restaurant_admin_action(update: Update, action: str):
         await run_reconciliation(update)
     elif action == "restaurant_recon_download":
         await download_last_report(update)
+    elif action == "restaurant_transaction_management":
+        await show_transaction_management(update)
+    elif action == "restaurant_daily_reports":
+        await show_daily_reports(update)
+    elif action == "view_all_transactions":
+        await show_paginated_transactions(update, page=0, filter_type="all")
+    elif action == "view_pending_transactions":
+        await show_paginated_transactions(update, page=0, filter_type="pending")
+    elif action == "view_verified_transactions":
+        await show_paginated_transactions(update, page=0, filter_type="verified")
+    elif action.startswith("transactions_"):
+        # Handle paginated transaction views
+        parts = action.split("_")
+        if len(parts) >= 3:
+            filter_type = parts[1]
+            page = int(parts[2])
+            await show_paginated_transactions(update, page=page, filter_type=filter_type)
+    elif action.startswith("verify_tx_"):
+        # Handle transaction verification
+        transaction_id = int(action.split("_")[-1])
+        await verify_transaction(update, transaction_id)
+    elif action == "export_transactions":
+        await export_transactions_csv(update, filter_type="all")
+    elif action.startswith("export_"):
+        # Handle export with filters
+        if action.startswith("export_verified"):
+            await export_transactions_csv(update, filter_type="verified")
+        elif action.startswith("export_pending"):
+            await export_transactions_csv(update, filter_type="pending")
+        else:
+            await export_transactions_csv(update, filter_type="all")
+    elif action.startswith("daily_report_"):
+        # Handle daily report requests
+        date = action.split("_")[-1]
+        await show_daily_report_detail(update, date)
+    elif action == "waiter_performance_report":
+        await show_waiter_performance_report(update)
+    elif action == "export_daily_report":
+        await export_daily_report_csv(update)
+    elif action.startswith("export_daily_"):
+        # Handle daily report export
+        date = action.split("_")[-1]
+        await export_daily_report_csv(update, date)
+    elif action == "export_waiter_performance":
+        await export_waiter_performance_csv(update)
     else:
         await update.callback_query.edit_message_text("🏪 Restaurant Admin feature coming soon...")
 
@@ -1441,6 +1486,404 @@ async def show_restaurant_reconciliation(update: Update):
     await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 
 # Global error handler to avoid unhandled exceptions bubbling up
+async def show_transaction_management(update: Update):
+    """Show transaction management dashboard for restaurant admin"""
+    user_id = update.effective_user.id
+    
+    # Get restaurant for this admin
+    restaurant = storage.get_restaurant_by_owner(user_id)
+    if not restaurant:
+        await update.callback_query.edit_message_text("❌ Restaurant not found.")
+        return
+    
+    # Get basic stats
+    total_transactions = storage.count_transactions_by_restaurant(restaurant['id'])
+    verified_transactions = storage.count_transactions_by_restaurant_with_filters(
+        restaurant['id'], verified_only=True
+    )
+    unverified_transactions = total_transactions - verified_transactions
+    
+    text = f"📒 **Transaction Management** - {restaurant['name']}\n\n"
+    text += f"📊 **Summary:**\n"
+    text += f"• Total Transactions: {total_transactions}\n"
+    text += f"• ✅ Verified: {verified_transactions}\n"
+    text += f"• ⏳ Pending: {unverified_transactions}\n\n"
+    text += "Choose an action:"
+    
+    keyboard = [
+        [InlineKeyboardButton("📋 View All Transactions", callback_data="view_all_transactions")],
+        [InlineKeyboardButton("⏳ Pending Verification", callback_data="view_pending_transactions")],
+        [InlineKeyboardButton("✅ Verified Transactions", callback_data="view_verified_transactions")],
+        [InlineKeyboardButton("📊 Transaction Analytics", callback_data="view_transaction_analytics")],
+        [InlineKeyboardButton("📤 Export Transactions", callback_data="export_transactions")],
+        [InlineKeyboardButton("🔙 Back to Restaurant Admin", callback_data="back_to_restaurant_admin")]
+    ]
+    
+    await update.callback_query.edit_message_text(
+        text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown'
+    )
+
+async def show_daily_reports(update: Update):
+    """Show daily reports dashboard for restaurant admin"""
+    user_id = update.effective_user.id
+    
+    # Get restaurant for this admin
+    restaurant = storage.get_restaurant_by_owner(user_id)
+    if not restaurant:
+        await update.callback_query.edit_message_text("❌ Restaurant not found.")
+        return
+    
+    # Get today's date
+    from datetime import datetime
+    today = datetime.now().strftime('%Y-%m-%d')
+    
+    # Get today's summary
+    summary = storage.get_daily_transaction_summary(restaurant['id'], today)
+    
+    text = f"📊 **Daily Reports** - {restaurant['name']}\n\n"
+    text += f"📅 **Today ({today}):**\n"
+    text += f"• Total Transactions: {summary.get('total_transactions', 0)}\n"
+    text += f"• Total Amount: {summary.get('total_amount', 0):.2f} ETB\n"
+    text += f"• Verified: {summary.get('verified_transactions', 0)} ({summary.get('verified_amount', 0):.2f} ETB)\n"
+    text += f"• Pending: {summary.get('unverified_transactions', 0)} ({summary.get('unverified_amount', 0):.2f} ETB)\n\n"
+    
+    if summary.get('waiter_breakdown'):
+        text += "👥 **Waiter Performance Today:**\n"
+        for waiter in summary['waiter_breakdown'][:5]:  # Show top 5
+            text += f"• {waiter['waiter_name']}: {waiter['transaction_count']} txns, {waiter['total_amount']:.2f} ETB\n"
+        text += "\n"
+    
+    text += "Choose an action:"
+    
+    keyboard = [
+        [InlineKeyboardButton("📅 Today's Report", callback_data=f"daily_report_{today}")],
+        [InlineKeyboardButton("📊 Custom Date Range", callback_data="custom_daily_report")],
+        [InlineKeyboardButton("👥 Waiter Performance", callback_data="waiter_performance_report")],
+        [InlineKeyboardButton("📤 Export Daily Report", callback_data="export_daily_report")],
+        [InlineKeyboardButton("🔙 Back to Restaurant Admin", callback_data="back_to_restaurant_admin")]
+    ]
+    
+    await update.callback_query.edit_message_text(
+        text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown'
+    )
+
+async def show_paginated_transactions(update: Update, page: int = 0, filter_type: str = "all"):
+    """Show paginated transactions with verification status"""
+    user_id = update.effective_user.id
+    PAGE_SIZE = 10
+    
+    # Get restaurant for this admin
+    restaurant = storage.get_restaurant_by_owner(user_id)
+    if not restaurant:
+        await update.callback_query.edit_message_text("❌ Restaurant not found.")
+        return
+    
+    # Determine filters
+    verified_only = None
+    if filter_type == "verified":
+        verified_only = True
+    elif filter_type == "pending":
+        verified_only = False
+    
+    # Get transactions
+    offset = page * PAGE_SIZE
+    transactions = storage.list_transactions_by_restaurant_with_filters(
+        restaurant['id'], verified_only=verified_only, limit=PAGE_SIZE, offset=offset
+    )
+    
+    total_count = storage.count_transactions_by_restaurant_with_filters(
+        restaurant['id'], verified_only=verified_only
+    )
+    
+    text = f"📒 **Transactions** - {restaurant['name']}\n\n"
+    text += f"Filter: {filter_type.title()} | Page {page + 1}/{(total_count + PAGE_SIZE - 1) // PAGE_SIZE}\n\n"
+    
+    if not transactions:
+        text += "No transactions found.\n"
+    else:
+        for tx in transactions:
+            status_icon = "✅" if tx.get('verified') else "⏳"
+            verified_info = f" (Verified by {tx.get('verified_by_name', 'Unknown')})" if tx.get('verified') else ""
+            text += f"{status_icon} **{tx['amount']} ETB** - {tx.get('waiter_name', 'Unknown')}{verified_info}\n"
+            text += f"   Bank: {tx.get('bank', 'Unknown')} | {tx.get('created_at', '')[:10]}\n\n"
+    
+    # Build navigation buttons
+    keyboard = []
+    
+    # Pagination buttons
+    nav_buttons = []
+    if page > 0:
+        nav_buttons.append(InlineKeyboardButton("⬅️ Previous", callback_data=f"transactions_{filter_type}_{page-1}"))
+    if offset + PAGE_SIZE < total_count:
+        nav_buttons.append(InlineKeyboardButton("Next ➡️", callback_data=f"transactions_{filter_type}_{page+1}"))
+    if nav_buttons:
+        keyboard.append(nav_buttons)
+    
+    # Add verification buttons for unverified transactions
+    if transactions and filter_type in ["all", "pending"]:
+        verify_buttons = []
+        for tx in transactions:
+            if not tx.get('verified'):
+                verify_buttons.append(InlineKeyboardButton(
+                    f"✅ Verify {tx['amount']} ETB", 
+                    callback_data=f"verify_tx_{tx['id']}"
+                ))
+                if len(verify_buttons) >= 3:  # Limit to 3 buttons per row
+                    keyboard.append(verify_buttons)
+                    verify_buttons = []
+        if verify_buttons:
+            keyboard.append(verify_buttons)
+    
+    # Filter buttons
+    filter_buttons = []
+    if filter_type != "all":
+        filter_buttons.append(InlineKeyboardButton("📋 All", callback_data="transactions_all_0"))
+    if filter_type != "pending":
+        filter_buttons.append(InlineKeyboardButton("⏳ Pending", callback_data="transactions_pending_0"))
+    if filter_type != "verified":
+        filter_buttons.append(InlineKeyboardButton("✅ Verified", callback_data="transactions_verified_0"))
+    if filter_buttons:
+        keyboard.append(filter_buttons)
+    
+    keyboard.append([InlineKeyboardButton("🔙 Back to Transaction Management", callback_data="restaurant_transaction_management")])
+    
+    await update.callback_query.edit_message_text(
+        text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown'
+    )
+
+async def verify_transaction(update: Update, transaction_id: int):
+    """Verify a transaction"""
+    user_id = update.effective_user.id
+    
+    # Get the transaction
+    transaction = storage.get_transaction_by_id(transaction_id)
+    if not transaction:
+        await update.callback_query.answer("❌ Transaction not found")
+        return
+    
+    # Check if user is restaurant admin for this transaction
+    restaurant = storage.get_restaurant_by_owner(user_id)
+    if not restaurant or transaction['restaurant_id'] != restaurant['id']:
+        await update.callback_query.answer("❌ You don't have permission to verify this transaction")
+        return
+    
+    # Verify the transaction
+    success = storage.verify_transaction(transaction_id, user_id, "Verified by restaurant admin")
+    
+    if success:
+        await update.callback_query.answer("✅ Transaction verified successfully!")
+        # Refresh the current view
+        await show_paginated_transactions(update, page=0, filter_type="all")
+    else:
+        await update.callback_query.answer("❌ Failed to verify transaction")
+
+async def export_transactions_csv(update: Update, filter_type: str = "all", date_from: str = None, date_to: str = None):
+    """Export transactions to CSV format"""
+    user_id = update.effective_user.id
+    
+    # Get restaurant for this admin
+    restaurant = storage.get_restaurant_by_owner(user_id)
+    if not restaurant:
+        await update.callback_query.edit_message_text("❌ Restaurant not found.")
+        return
+    
+    # Determine filters
+    verified_only = None
+    if filter_type == "verified":
+        verified_only = True
+    elif filter_type == "pending":
+        verified_only = False
+    
+    # Get all transactions matching the filter
+    transactions = storage.list_transactions_by_restaurant_with_filters(
+        restaurant['id'], verified_only=verified_only, date_from=date_from, date_to=date_to, limit=10000
+    )
+    
+    if not transactions:
+        await update.callback_query.answer("❌ No transactions to export")
+        return
+    
+    # Create CSV content
+    csv_content = "Transaction ID,Amount,Currency,Bank,Waiter,Status,Verified By,Date,Time,Payer,Receiver,Reference\n"
+    
+    for tx in transactions:
+        status = "Verified" if tx.get('verified') else "Pending"
+        verified_by = tx.get('verified_by_name', '') if tx.get('verified') else ''
+        csv_content += f"{tx['id']},{tx['amount']},{tx.get('currency', 'ETB')},{tx.get('bank', '')},{tx.get('waiter_name', '')},{status},{verified_by},{tx.get('created_at', '')[:10]},{tx.get('created_at', '')[11:19]},{tx.get('payer', '')},{tx.get('receiver', '')},{tx.get('original_ref', '')}\n"
+    
+    # Send as document
+    from io import BytesIO
+    from datetime import datetime
+    buf = BytesIO(csv_content.encode('utf-8'))
+    buf.name = f"transactions_{filter_type}_{restaurant['name']}_{datetime.now().strftime('%Y%m%d')}.csv"
+    
+    await update.callback_query.message.reply_document(
+        document=buf,
+        caption=f"📊 Exported {len(transactions)} transactions ({filter_type})"
+    )
+    
+    await update.callback_query.answer("✅ Export completed!")
+
+async def show_daily_report_detail(update: Update, date: str):
+    """Show detailed daily report for a specific date"""
+    user_id = update.effective_user.id
+    
+    # Get restaurant for this admin
+    restaurant = storage.get_restaurant_by_owner(user_id)
+    if not restaurant:
+        await update.callback_query.edit_message_text("❌ Restaurant not found.")
+        return
+    
+    # Get daily summary
+    summary = storage.get_daily_transaction_summary(restaurant['id'], date)
+    
+    text = f"📊 **Daily Report** - {restaurant['name']}\n"
+    text += f"📅 **Date:** {date}\n\n"
+    
+    text += f"📈 **Summary:**\n"
+    text += f"• Total Transactions: {summary.get('total_transactions', 0)}\n"
+    text += f"• Total Amount: {summary.get('total_amount', 0):.2f} ETB\n"
+    text += f"• Verified: {summary.get('verified_transactions', 0)} ({summary.get('verified_amount', 0):.2f} ETB)\n"
+    text += f"• Pending: {summary.get('unverified_transactions', 0)} ({summary.get('unverified_amount', 0):.2f} ETB)\n\n"
+    
+    if summary.get('waiter_breakdown'):
+        text += "👥 **Waiter Performance:**\n"
+        for waiter in summary['waiter_breakdown']:
+            verification_rate = (waiter['verified_count'] / waiter['transaction_count'] * 100) if waiter['transaction_count'] > 0 else 0
+            text += f"• **{waiter['waiter_name']}:**\n"
+            text += f"  - {waiter['transaction_count']} transactions, {waiter['total_amount']:.2f} ETB\n"
+            text += f"  - {waiter['verified_count']} verified ({verification_rate:.1f}%)\n"
+        text += "\n"
+    
+    keyboard = [
+        [InlineKeyboardButton("📤 Export This Report", callback_data=f"export_daily_{date}")],
+        [InlineKeyboardButton("🔙 Back to Daily Reports", callback_data="restaurant_daily_reports")]
+    ]
+    
+    await update.callback_query.edit_message_text(
+        text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown'
+    )
+
+async def show_waiter_performance_report(update: Update):
+    """Show waiter performance summary"""
+    user_id = update.effective_user.id
+    
+    # Get restaurant for this admin
+    restaurant = storage.get_restaurant_by_owner(user_id)
+    if not restaurant:
+        await update.callback_query.edit_message_text("❌ Restaurant not found.")
+        return
+    
+    # Get waiter performance (last 30 days)
+    from datetime import datetime, timedelta
+    date_from = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+    performance = storage.get_waiter_performance_summary(restaurant['id'], date_from=date_from)
+    
+    text = f"👥 **Waiter Performance Report** - {restaurant['name']}\n"
+    text += f"📅 **Period:** Last 30 days\n\n"
+    
+    if not performance:
+        text += "No waiter performance data available.\n"
+    else:
+        for waiter in performance:
+            text += f"• **{waiter['waiter_name']}:**\n"
+            text += f"  - {waiter['total_transactions']} transactions\n"
+            text += f"  - {waiter['total_amount']:.2f} ETB total\n"
+            text += f"  - {waiter['avg_transaction_amount']:.2f} ETB average\n"
+            text += f"  - {waiter['verification_rate']:.1f}% verification rate\n\n"
+    
+    keyboard = [
+        [InlineKeyboardButton("📤 Export Performance Report", callback_data="export_waiter_performance")],
+        [InlineKeyboardButton("🔙 Back to Daily Reports", callback_data="restaurant_daily_reports")]
+    ]
+    
+    await update.callback_query.edit_message_text(
+        text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown'
+    )
+
+async def export_daily_report_csv(update: Update, date: str = None):
+    """Export daily report to CSV"""
+    user_id = update.effective_user.id
+    
+    # Get restaurant for this admin
+    restaurant = storage.get_restaurant_by_owner(user_id)
+    if not restaurant:
+        await update.callback_query.edit_message_text("❌ Restaurant not found.")
+        return
+    
+    if not date:
+        from datetime import datetime
+        date = datetime.now().strftime('%Y-%m-%d')
+    
+    # Get daily summary
+    summary = storage.get_daily_transaction_summary(restaurant['id'], date)
+    
+    # Create CSV content
+    csv_content = f"Daily Report for {restaurant['name']} - {date}\n\n"
+    csv_content += "Summary\n"
+    csv_content += f"Total Transactions,{summary.get('total_transactions', 0)}\n"
+    csv_content += f"Total Amount,{summary.get('total_amount', 0):.2f} ETB\n"
+    csv_content += f"Verified Transactions,{summary.get('verified_transactions', 0)}\n"
+    csv_content += f"Verified Amount,{summary.get('verified_amount', 0):.2f} ETB\n"
+    csv_content += f"Pending Transactions,{summary.get('unverified_transactions', 0)}\n"
+    csv_content += f"Pending Amount,{summary.get('unverified_amount', 0):.2f} ETB\n\n"
+    
+    if summary.get('waiter_breakdown'):
+        csv_content += "Waiter Breakdown\n"
+        csv_content += "Waiter,Transactions,Total Amount,Verified Count,Verified Amount\n"
+        for waiter in summary['waiter_breakdown']:
+            csv_content += f"{waiter['waiter_name']},{waiter['transaction_count']},{waiter['total_amount']:.2f},{waiter['verified_count']},{waiter['verified_amount']:.2f}\n"
+    
+    # Send as document
+    from io import BytesIO
+    buf = BytesIO(csv_content.encode('utf-8'))
+    buf.name = f"daily_report_{restaurant['name']}_{date}.csv"
+    
+    await update.callback_query.message.reply_document(
+        document=buf,
+        caption=f"📊 Daily Report for {date}"
+    )
+    
+    await update.callback_query.answer("✅ Daily report exported!")
+
+async def export_waiter_performance_csv(update: Update):
+    """Export waiter performance report to CSV"""
+    user_id = update.effective_user.id
+    
+    # Get restaurant for this admin
+    restaurant = storage.get_restaurant_by_owner(user_id)
+    if not restaurant:
+        await update.callback_query.edit_message_text("❌ Restaurant not found.")
+        return
+    
+    # Get waiter performance (last 30 days)
+    from datetime import datetime, timedelta
+    date_from = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+    performance = storage.get_waiter_performance_summary(restaurant['id'], date_from=date_from)
+    
+    if not performance:
+        await update.callback_query.answer("❌ No performance data to export")
+        return
+    
+    # Create CSV content
+    csv_content = f"Waiter Performance Report for {restaurant['name']} - Last 30 Days\n\n"
+    csv_content += "Waiter,Total Transactions,Total Amount,Average Transaction,Verified Transactions,Verified Amount,Verification Rate\n"
+    
+    for waiter in performance:
+        csv_content += f"{waiter['waiter_name']},{waiter['total_transactions']},{waiter['total_amount']:.2f},{waiter['avg_transaction_amount']:.2f},{waiter['verified_transactions']},{waiter['verified_amount']:.2f},{waiter['verification_rate']:.1f}%\n"
+    
+    # Send as document
+    from io import BytesIO
+    buf = BytesIO(csv_content.encode('utf-8'))
+    buf.name = f"waiter_performance_{restaurant['name']}_{datetime.now().strftime('%Y%m%d')}.csv"
+    
+    await update.callback_query.message.reply_document(
+        document=buf,
+        caption=f"📊 Waiter Performance Report (Last 30 Days)"
+    )
+    
+    await update.callback_query.answer("✅ Performance report exported!")
+
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle errors without logging out users"""
     try:

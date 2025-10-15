@@ -156,6 +156,27 @@ class Storage:
             self.conn.commit()
         except Exception:
             pass  # Column already exists
+        
+        # Add verification columns for transaction verification system
+        try:
+            c.execute("ALTER TABLE transactions ADD COLUMN verified INTEGER DEFAULT 0")
+            c.execute("ALTER TABLE transactions ADD COLUMN verified_by INTEGER")
+            c.execute("ALTER TABLE transactions ADD COLUMN verified_at TIMESTAMP")
+            c.execute("ALTER TABLE transactions ADD COLUMN verification_notes TEXT")
+            c.execute("CREATE INDEX IF NOT EXISTS idx_tx_verified ON transactions(verified);")
+            c.execute("CREATE INDEX IF NOT EXISTS idx_tx_verified_by ON transactions(verified_by);")
+            self.conn.commit()
+        except Exception:
+            pass  # Columns already exist
+        
+        # Prepare for future cashier role - add cashier_id column
+        try:
+            c.execute("ALTER TABLE transactions ADD COLUMN cashier_id INTEGER")
+            c.execute("ALTER TABLE transactions ADD COLUMN cashier_verified_at TIMESTAMP")
+            c.execute("CREATE INDEX IF NOT EXISTS idx_tx_cashier_id ON transactions(cashier_id);")
+            self.conn.commit()
+        except Exception:
+            pass  # Column already exists
 
         # approvals
         c.execute(
@@ -567,6 +588,211 @@ class Storage:
             (restaurant_id, limit, offset),
         )
         return [dict(r) for r in cur.fetchall()]
+
+    # ----------------------
+    # Transaction Verification & Reporting
+    # ----------------------
+    def verify_transaction(self, transaction_id: int, verified_by_telegram_id: int, verification_notes: Optional[str] = None) -> bool:
+        """Mark a transaction as verified by a specific user"""
+        verifier = self.get_user_by_telegram(verified_by_telegram_id)
+        if not verifier:
+            return False
+        cur = self.conn.cursor()
+        cur.execute(
+            "UPDATE transactions SET verified = 1, verified_by = ?, verified_at = CURRENT_TIMESTAMP, verification_notes = ? WHERE id = ?",
+            (verifier["id"], verification_notes, transaction_id)
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+    
+    def unverify_transaction(self, transaction_id: int) -> bool:
+        """Mark a transaction as unverified"""
+        cur = self.conn.cursor()
+        cur.execute(
+            "UPDATE transactions SET verified = 0, verified_by = NULL, verified_at = NULL, verification_notes = NULL WHERE id = ?",
+            (transaction_id,)
+        )
+        self.conn.commit()
+        return cur.rowcount > 0
+    
+    def get_transaction_by_id(self, transaction_id: int) -> Optional[Dict[str, Any]]:
+        """Get a specific transaction by ID"""
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            SELECT t.*, u.username as waiter_name, v.username as verified_by_name
+            FROM transactions t
+            LEFT JOIN waiters w ON t.waiter_id = w.id
+            LEFT JOIN users u ON w.user_id = u.id
+            LEFT JOIN users v ON t.verified_by = v.id
+            WHERE t.id = ?
+            """,
+            (transaction_id,)
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+    
+    def list_transactions_by_restaurant_with_filters(self, restaurant_id: int, waiter_id: Optional[int] = None, 
+                                                   verified_only: Optional[bool] = None, date_from: Optional[str] = None, 
+                                                   date_to: Optional[str] = None, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
+        """List transactions for a restaurant with filtering options"""
+        cur = self.conn.cursor()
+        
+        # Build WHERE clause dynamically
+        where_conditions = ["t.restaurant_id = ?"]
+        params = [restaurant_id]
+        
+        if waiter_id:
+            where_conditions.append("t.waiter_id = ?")
+            params.append(waiter_id)
+            
+        if verified_only is not None:
+            if verified_only:
+                where_conditions.append("t.verified = 1")
+            else:
+                where_conditions.append("t.verified = 0")
+                
+        if date_from:
+            where_conditions.append("DATE(t.created_at) >= ?")
+            params.append(date_from)
+            
+        if date_to:
+            where_conditions.append("DATE(t.created_at) <= ?")
+            params.append(date_to)
+            
+        where_clause = " AND ".join(where_conditions)
+        
+        cur.execute(
+            f"""
+            SELECT t.*, u.username as waiter_name, v.username as verified_by_name
+            FROM transactions t
+            LEFT JOIN waiters w ON t.waiter_id = w.id
+            LEFT JOIN users u ON w.user_id = u.id
+            LEFT JOIN users v ON t.verified_by = v.id
+            WHERE {where_clause}
+            ORDER BY t.created_at DESC
+            LIMIT ? OFFSET ?
+            """,
+            params + [limit, offset]
+        )
+        return [dict(r) for r in cur.fetchall()]
+    
+    def get_daily_transaction_summary(self, restaurant_id: int, date: str) -> Dict[str, Any]:
+        """Get daily transaction summary for a restaurant"""
+        cur = self.conn.cursor()
+        
+        # Get total transactions and amounts
+        cur.execute(
+            """
+            SELECT 
+                COUNT(*) as total_transactions,
+                SUM(CASE WHEN verified = 1 THEN 1 ELSE 0 END) as verified_transactions,
+                SUM(CASE WHEN verified = 0 THEN 1 ELSE 0 END) as unverified_transactions,
+                SUM(CAST(amount AS REAL)) as total_amount,
+                SUM(CASE WHEN verified = 1 THEN CAST(amount AS REAL) ELSE 0 END) as verified_amount,
+                SUM(CASE WHEN verified = 0 THEN CAST(amount AS REAL) ELSE 0 END) as unverified_amount
+            FROM transactions 
+            WHERE restaurant_id = ? AND DATE(created_at) = ?
+            """,
+            (restaurant_id, date)
+        )
+        summary = dict(cur.fetchone())
+        
+        # Get waiter breakdown
+        cur.execute(
+            """
+            SELECT 
+                w.id as waiter_id,
+                u.username as waiter_name,
+                COUNT(*) as transaction_count,
+                SUM(CAST(t.amount AS REAL)) as total_amount,
+                SUM(CASE WHEN t.verified = 1 THEN 1 ELSE 0 END) as verified_count,
+                SUM(CASE WHEN t.verified = 1 THEN CAST(t.amount AS REAL) ELSE 0 END) as verified_amount
+            FROM transactions t
+            JOIN waiters w ON t.waiter_id = w.id
+            JOIN users u ON w.user_id = u.id
+            WHERE t.restaurant_id = ? AND DATE(t.created_at) = ?
+            GROUP BY w.id, u.username
+            ORDER BY total_amount DESC
+            """,
+            (restaurant_id, date)
+        )
+        summary['waiter_breakdown'] = [dict(r) for r in cur.fetchall()]
+        
+        return summary
+    
+    def get_waiter_performance_summary(self, restaurant_id: int, date_from: Optional[str] = None, date_to: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get waiter performance summary for a restaurant"""
+        cur = self.conn.cursor()
+        
+        where_conditions = ["t.restaurant_id = ?"]
+        params = [restaurant_id]
+        
+        if date_from:
+            where_conditions.append("DATE(t.created_at) >= ?")
+            params.append(date_from)
+            
+        if date_to:
+            where_conditions.append("DATE(t.created_at) <= ?")
+            params.append(date_to)
+            
+        where_clause = " AND ".join(where_conditions)
+        
+        cur.execute(
+            f"""
+            SELECT 
+                w.id as waiter_id,
+                u.username as waiter_name,
+                COUNT(*) as total_transactions,
+                SUM(CAST(t.amount AS REAL)) as total_amount,
+                AVG(CAST(t.amount AS REAL)) as avg_transaction_amount,
+                SUM(CASE WHEN t.verified = 1 THEN 1 ELSE 0 END) as verified_transactions,
+                SUM(CASE WHEN t.verified = 1 THEN CAST(t.amount AS REAL) ELSE 0 END) as verified_amount,
+                ROUND(CAST(SUM(CASE WHEN t.verified = 1 THEN 1 ELSE 0 END) AS REAL) / COUNT(*) * 100, 2) as verification_rate
+            FROM transactions t
+            JOIN waiters w ON t.waiter_id = w.id
+            JOIN users u ON w.user_id = u.id
+            WHERE {where_clause}
+            GROUP BY w.id, u.username
+            ORDER BY total_amount DESC
+            """,
+            params
+        )
+        return [dict(r) for r in cur.fetchall()]
+    
+    def count_transactions_by_restaurant_with_filters(self, restaurant_id: int, waiter_id: Optional[int] = None, 
+                                                    verified_only: Optional[bool] = None, date_from: Optional[str] = None, 
+                                                    date_to: Optional[str] = None) -> int:
+        """Count transactions for a restaurant with filtering options"""
+        cur = self.conn.cursor()
+        
+        # Build WHERE clause dynamically
+        where_conditions = ["restaurant_id = ?"]
+        params = [restaurant_id]
+        
+        if waiter_id:
+            where_conditions.append("waiter_id = ?")
+            params.append(waiter_id)
+            
+        if verified_only is not None:
+            if verified_only:
+                where_conditions.append("verified = 1")
+            else:
+                where_conditions.append("verified = 0")
+                
+        if date_from:
+            where_conditions.append("DATE(created_at) >= ?")
+            params.append(date_from)
+            
+        if date_to:
+            where_conditions.append("DATE(created_at) <= ?")
+            params.append(date_to)
+            
+        where_clause = " AND ".join(where_conditions)
+        
+        cur.execute(f"SELECT COUNT(*) as count FROM transactions WHERE {where_clause}", params)
+        row = cur.fetchone()
+        return row['count'] if row else 0
 
     def close(self) -> None:
         if self._conn is not None:

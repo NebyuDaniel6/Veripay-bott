@@ -148,7 +148,8 @@ def build_restaurant_admin_menu_keyboard(user_id: int, user_languages: Dict[int,
     """Build Restaurant Admin menu keyboard"""
     keyboard = [
         [InlineKeyboardButton(get_text(user_id, "manage_waiters", user_languages), callback_data="restaurant_manage_waiters")],
-        [InlineKeyboardButton("📒 Restaurant Transactions", callback_data="restaurant_transactions")],
+        [InlineKeyboardButton("📒 Transaction Management", callback_data="restaurant_transaction_management")],
+        [InlineKeyboardButton("📊 Daily Reports", callback_data="restaurant_daily_reports")],
         [InlineKeyboardButton("⚙️ Settings", callback_data="restaurant_settings")],
         [InlineKeyboardButton("📄 Upload Statement", callback_data="restaurant_recon_upload")],
         [InlineKeyboardButton("🧮 Run Reconciliation", callback_data="restaurant_recon_run")],
