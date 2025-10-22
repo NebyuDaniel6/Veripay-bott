@@ -794,6 +794,90 @@ class Storage:
         row = cur.fetchone()
         return row['count'] if row else 0
 
+    def get_transactions_by_weekday(self, restaurant_id: int, weekday: str, week_offset: int = 0) -> List[Dict[str, Any]]:
+        """Get transactions for a specific weekday (0=Monday, 6=Sunday)
+        week_offset: 0 = current week, -1 = last week"""
+        from datetime import datetime, timedelta
+        
+        # Calculate the target date
+        today = datetime.now()
+        days_since_monday = today.weekday()  # Monday=0, Sunday=6
+        
+        # Get Monday of current week
+        monday_of_week = today - timedelta(days=days_since_monday)
+        
+        # Apply week offset
+        target_week_monday = monday_of_week + timedelta(weeks=week_offset)
+        
+        # Calculate target date based on weekday
+        weekday_map = {
+            'monday': 0, 'tuesday': 1, 'wednesday': 2, 'thursday': 3,
+            'friday': 4, 'saturday': 5, 'sunday': 6
+        }
+        
+        if weekday == 'lastweek':
+            # For last week, get all days from Monday to Sunday
+            start_date = target_week_monday
+            end_date = start_date + timedelta(days=6)
+        else:
+            # For specific day
+            day_offset = weekday_map.get(weekday.lower(), 0)
+            target_date = target_week_monday + timedelta(days=day_offset)
+            start_date = target_date
+            end_date = target_date
+        
+        cur = self.conn.cursor()
+        
+        if weekday == 'lastweek':
+            # Get all transactions for the week
+            cur.execute(
+                """
+                SELECT t.*, u.username as waiter_name, v.username as verified_by_name
+                FROM transactions t
+                LEFT JOIN waiters w ON t.waiter_id = w.id
+                LEFT JOIN users u ON w.user_id = u.id
+                LEFT JOIN users v ON t.verified_by = v.id
+                WHERE t.restaurant_id = ? 
+                AND DATE(t.created_at) >= ? 
+                AND DATE(t.created_at) <= ?
+                AND (t.archived IS NULL OR t.archived = 0)
+                ORDER BY t.created_at DESC
+                """,
+                (restaurant_id, start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
+            )
+        else:
+            # Get transactions for specific day
+            cur.execute(
+                """
+                SELECT t.*, u.username as waiter_name, v.username as verified_by_name
+                FROM transactions t
+                LEFT JOIN waiters w ON t.waiter_id = w.id
+                LEFT JOIN users u ON w.user_id = u.id
+                LEFT JOIN users v ON t.verified_by = v.id
+                WHERE t.restaurant_id = ? 
+                AND DATE(t.created_at) = ?
+                AND (t.archived IS NULL OR t.archived = 0)
+                ORDER BY t.created_at DESC
+                """,
+                (restaurant_id, start_date.strftime('%Y-%m-%d'))
+            )
+        
+        return [dict(r) for r in cur.fetchall()]
+    
+    def archive_old_transactions(self, restaurant_id: int, weeks_old: int = 2) -> int:
+        """Archive transactions older than specified weeks"""
+        from datetime import datetime, timedelta
+        
+        cutoff_date = datetime.now() - timedelta(weeks=weeks_old)
+        
+        cur = self.conn.cursor()
+        cur.execute(
+            "UPDATE transactions SET archived = 1, archived_at = CURRENT_TIMESTAMP WHERE restaurant_id = ? AND created_at < ? AND (archived IS NULL OR archived = 0)",
+            (restaurant_id, cutoff_date.strftime('%Y-%m-%d'))
+        )
+        self.conn.commit()
+        return cur.rowcount
+
     def close(self) -> None:
         if self._conn is not None:
             self._conn.close()

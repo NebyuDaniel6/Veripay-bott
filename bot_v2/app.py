@@ -1254,21 +1254,6 @@ async def show_waiter_help(update: Update):
     
     keyboard = [[InlineKeyboardButton("🔙 Back to Waiter Menu", callback_data="back_to_waiter")]]
     await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-async def handle_restaurant_admin_action(update: Update, action: str):
-    """Handle Restaurant Admin actions
-    PRD:M1.3 Manage waiters; Rules: waiter ≠ admin
-    """
-    user_id = update.callback_query.from_user.id
-    
-    ensure_user_in_memory(user_id, storage)
-    if users[user_id]['role'] != UserRole.RESTAURANT_ADMIN:
-        await update.callback_query.edit_message_text("❌ Access denied. Restaurant Admin only.")
-        return
-    
-    if action == "restaurant_manage_waiters":
-        await show_waiter_management(update)
-    else:
-        await update.callback_query.edit_message_text("🏪 Restaurant Admin feature coming soon...")
 
 async def show_waiter_management(update: Update):
     """Show waiter management interface
@@ -1375,6 +1360,20 @@ async def handle_restaurant_admin_action(update: Update, action: str):
         await export_daily_report_csv(update, date)
     elif action == "export_waiter_performance":
         await export_waiter_performance_csv(update)
+    elif action.startswith("weekly_report_"):
+        day = action.split("_")[-1]
+        is_last_week = (day == "lastweek")
+        await show_weekly_day_report(update, day, is_last_week)
+    elif action == "export_all_weekly":
+        await export_weekly_transactions(update)
+    elif action.startswith("export_weekly_"):
+        # Handle weekly export for specific day
+        parts = action.split("_")
+        if len(parts) >= 4:
+            day = parts[2]
+            week_offset = int(parts[3])
+            # For now, just export current week - can be enhanced later
+            await export_weekly_transactions(update)
     else:
         await update.callback_query.edit_message_text("🏪 Restaurant Admin feature coming soon...")
 
@@ -1511,11 +1510,15 @@ async def show_transaction_management(update: Update):
     text += "Choose an action:"
     
     keyboard = [
-        [InlineKeyboardButton("📋 View All Transactions", callback_data="view_all_transactions")],
-        [InlineKeyboardButton("⏳ Pending Verification", callback_data="view_pending_transactions")],
-        [InlineKeyboardButton("✅ Verified Transactions", callback_data="view_verified_transactions")],
-        [InlineKeyboardButton("📊 Transaction Analytics", callback_data="view_transaction_analytics")],
-        [InlineKeyboardButton("📤 Export Transactions", callback_data="export_transactions")],
+        [InlineKeyboardButton("📅 Monday Report", callback_data="weekly_report_monday")],
+        [InlineKeyboardButton("📅 Tuesday Report", callback_data="weekly_report_tuesday")],
+        [InlineKeyboardButton("📅 Wednesday Report", callback_data="weekly_report_wednesday")],
+        [InlineKeyboardButton("📅 Thursday Report", callback_data="weekly_report_thursday")],
+        [InlineKeyboardButton("📅 Friday Report", callback_data="weekly_report_friday")],
+        [InlineKeyboardButton("📅 Saturday Report", callback_data="weekly_report_saturday")],
+        [InlineKeyboardButton("📅 Sunday Report", callback_data="weekly_report_sunday")],
+        [InlineKeyboardButton("📊 Last Week", callback_data="weekly_report_lastweek")],
+        [InlineKeyboardButton("📤 Export All", callback_data="export_all_weekly")],
         [InlineKeyboardButton("🔙 Back to Restaurant Admin", callback_data="back_to_restaurant_admin")]
     ]
     
@@ -1532,6 +1535,11 @@ async def show_daily_reports(update: Update):
     if not restaurant:
         await update.callback_query.edit_message_text("❌ Restaurant not found.")
         return
+    
+    # Auto-archive old transactions (older than 2 weeks)
+    archived_count = await check_and_archive_old_transactions(restaurant['id'])
+    if archived_count > 0:
+        logger.info(f"Auto-archived {archived_count} old transactions for restaurant {restaurant['id']}")
     
     # Get today's date
     from datetime import datetime
@@ -1556,6 +1564,7 @@ async def show_daily_reports(update: Update):
     text += "Choose an action:"
     
     keyboard = [
+        [InlineKeyboardButton("📅 Weekly Reports", callback_data="restaurant_transaction_management")],
         [InlineKeyboardButton("📅 Today's Report", callback_data=f"daily_report_{today}")],
         [InlineKeyboardButton("📊 Custom Date Range", callback_data="custom_daily_report")],
         [InlineKeyboardButton("👥 Waiter Performance", callback_data="waiter_performance_report")],
@@ -1883,6 +1892,126 @@ async def export_waiter_performance_csv(update: Update):
     )
     
     await update.callback_query.answer("✅ Performance report exported!")
+
+async def show_weekly_day_report(update: Update, day_name: str, is_last_week: bool = False):
+    """Show report for specific weekday or last week"""
+    user_id = update.effective_user.id
+    
+    # Get restaurant for this admin
+    restaurant = storage.get_restaurant_by_owner(user_id)
+    if not restaurant:
+        await update.callback_query.edit_message_text("❌ Restaurant not found.")
+        return
+    
+    # Get transactions for the specified day/week
+    week_offset = -1 if is_last_week else 0
+    transactions = storage.get_transactions_by_weekday(restaurant['id'], day_name, week_offset)
+    
+    # Calculate date range for display
+    from datetime import datetime, timedelta
+    today = datetime.now()
+    days_since_monday = today.weekday()
+    monday_of_week = today - timedelta(days=days_since_monday)
+    target_week_monday = monday_of_week + timedelta(weeks=week_offset)
+    
+    if is_last_week:
+        start_date = target_week_monday
+        end_date = start_date + timedelta(days=6)
+        date_range = f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
+        title = f"📊 **Last Week Report** - {restaurant['name']}"
+    else:
+        weekday_map = {
+            'monday': 0, 'tuesday': 1, 'wednesday': 2, 'thursday': 3,
+            'friday': 4, 'saturday': 5, 'sunday': 6
+        }
+        day_offset = weekday_map.get(day_name.lower(), 0)
+        target_date = target_week_monday + timedelta(days=day_offset)
+        date_range = target_date.strftime('%Y-%m-%d')
+        title = f"📅 **{day_name.title()} Report** - {restaurant['name']}"
+    
+    text = f"{title}\n"
+    text += f"📅 **Date:** {date_range}\n\n"
+    
+    if not transactions:
+        text += "No transactions found for this period.\n"
+    else:
+        # Calculate summary
+        total_amount = sum(float(tx.get('amount', 0)) for tx in transactions)
+        verified_count = sum(1 for tx in transactions if tx.get('verified'))
+        pending_count = len(transactions) - verified_count
+        
+        text += f"📈 **Summary:**\n"
+        text += f"• Total Transactions: {len(transactions)}\n"
+        text += f"• Total Amount: {total_amount:.2f} ETB\n"
+        text += f"• ✅ Verified: {verified_count}\n"
+        text += f"• ⏳ Pending: {pending_count}\n\n"
+        
+        # Show recent transactions (limit to 10 for display)
+        text += "📋 **Recent Transactions:**\n"
+        for tx in transactions[:10]:
+            status_icon = "✅" if tx.get('verified') else "⏳"
+            verified_info = f" (Verified by {tx.get('verified_by_name', 'Unknown')})" if tx.get('verified') else ""
+            text += f"{status_icon} **{tx['amount']} ETB** - {tx.get('waiter_name', 'Unknown')}{verified_info}\n"
+            text += f"   Bank: {tx.get('bank', 'Unknown')} | {tx.get('created_at', '')[:10]}\n\n"
+        
+        if len(transactions) > 10:
+            text += f"... and {len(transactions) - 10} more transactions\n\n"
+    
+    # Build keyboard
+    keyboard = [
+        [InlineKeyboardButton("📤 Export This Report", callback_data=f"export_weekly_{day_name}_{week_offset}")],
+        [InlineKeyboardButton("🔙 Back to Weekly Reports", callback_data="restaurant_transaction_management")]
+    ]
+    
+    await update.callback_query.edit_message_text(
+        text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown'
+    )
+
+async def export_weekly_transactions(update: Update):
+    """Export all current week transactions"""
+    user_id = update.effective_user.id
+    
+    # Get restaurant for this admin
+    restaurant = storage.get_restaurant_by_owner(user_id)
+    if not restaurant:
+        await update.callback_query.edit_message_text("❌ Restaurant not found.")
+        return
+    
+    # Get all transactions for current week (Monday to Sunday)
+    transactions = storage.get_transactions_by_weekday(restaurant['id'], 'lastweek', week_offset=0)
+    
+    if not transactions:
+        await update.callback_query.answer("❌ No transactions to export for current week")
+        return
+    
+    # Create CSV content
+    csv_content = f"Weekly Report for {restaurant['name']} - Current Week\n\n"
+    csv_content += "Transaction ID,Amount,Currency,Bank,Waiter,Status,Verified By,Date,Time,Payer,Receiver,Reference\n"
+    
+    for tx in transactions:
+        status = "Verified" if tx.get('verified') else "Pending"
+        verified_by = tx.get('verified_by_name', '') if tx.get('verified') else ''
+        csv_content += f"{tx['id']},{tx['amount']},{tx.get('currency', 'ETB')},{tx.get('bank', '')},{tx.get('waiter_name', '')},{status},{verified_by},{tx.get('created_at', '')[:10]},{tx.get('created_at', '')[:19]},{tx.get('payer', '')},{tx.get('receiver', '')},{tx.get('original_ref', '')}\n"
+    
+    # Send as document
+    from io import BytesIO
+    from datetime import datetime
+    buf = BytesIO(csv_content.encode('utf-8'))
+    buf.name = f"weekly_report_{restaurant['name']}_{datetime.now().strftime('%Y%m%d')}.csv"
+    
+    await update.callback_query.message.reply_document(
+        document=buf,
+        caption=f"📊 Weekly Report - {len(transactions)} transactions"
+    )
+    
+    await update.callback_query.answer("✅ Weekly report exported!")
+
+async def check_and_archive_old_transactions(restaurant_id: int):
+    """Auto-archive transactions older than 2 weeks"""
+    archived_count = storage.archive_old_transactions(restaurant_id, weeks_old=2)
+    if archived_count > 0:
+        logger.info(f"Auto-archived {archived_count} transactions for restaurant {restaurant_id}")
+    return archived_count
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle errors without logging out users"""
