@@ -1372,8 +1372,7 @@ async def handle_restaurant_admin_action(update: Update, action: str):
         if len(parts) >= 4:
             day = parts[2]
             week_offset = int(parts[3])
-            # For now, just export current week - can be enhanced later
-            await export_weekly_transactions(update)
+            await export_weekly_day_transactions(update, day, week_offset)
     else:
         await update.callback_query.edit_message_text("🏪 Restaurant Admin feature coming soon...")
 
@@ -1894,7 +1893,7 @@ async def export_waiter_performance_csv(update: Update):
     await update.callback_query.answer("✅ Performance report exported!")
 
 async def show_weekly_day_report(update: Update, day_name: str, is_last_week: bool = False):
-    """Show report for specific weekday or last week"""
+    """Show detailed report for specific weekday or last week"""
     user_id = update.effective_user.id
     
     # Get restaurant for this admin
@@ -1930,32 +1929,87 @@ async def show_weekly_day_report(update: Update, day_name: str, is_last_week: bo
         title = f"📅 **{day_name.title()} Report** - {restaurant['name']}"
     
     text = f"{title}\n"
-    text += f"📅 **Date:** {date_range}\n\n"
+    text += f"📅 **Date:** {date_range}\n"
+    text += f"🏪 **Restaurant:** {restaurant['name']}\n"
+    text += f"📊 **Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
     
     if not transactions:
-        text += "No transactions found for this period.\n"
+        text += "❌ **No transactions found for this period.**\n\n"
+        text += "This could mean:\n"
+        text += "• No transactions were recorded on this day\n"
+        text += "• Transactions are older than 2 weeks (archived)\n"
+        text += "• Date range is in the future\n\n"
     else:
-        # Calculate summary
+        # Calculate comprehensive summary
         total_amount = sum(float(tx.get('amount', 0)) for tx in transactions)
         verified_count = sum(1 for tx in transactions if tx.get('verified'))
         pending_count = len(transactions) - verified_count
+        verified_amount = sum(float(tx.get('amount', 0)) for tx in transactions if tx.get('verified'))
+        pending_amount = total_amount - verified_amount
         
-        text += f"📈 **Summary:**\n"
-        text += f"• Total Transactions: {len(transactions)}\n"
-        text += f"• Total Amount: {total_amount:.2f} ETB\n"
-        text += f"• ✅ Verified: {verified_count}\n"
-        text += f"• ⏳ Pending: {pending_count}\n\n"
+        # Bank breakdown
+        bank_totals = {}
+        waiter_totals = {}
+        for tx in transactions:
+            bank = tx.get('bank', 'Unknown')
+            waiter = tx.get('waiter_name', 'Unknown')
+            amount = float(tx.get('amount', 0))
+            
+            bank_totals[bank] = bank_totals.get(bank, 0) + amount
+            waiter_totals[waiter] = waiter_totals.get(waiter, 0) + amount
         
-        # Show recent transactions (limit to 10 for display)
-        text += "📋 **Recent Transactions:**\n"
-        for tx in transactions[:10]:
+        text += f"📈 **SUMMARY STATISTICS:**\n"
+        text += f"• Total Transactions: **{len(transactions)}**\n"
+        text += f"• Total Amount: **{total_amount:.2f} ETB**\n"
+        text += f"• ✅ Verified: {verified_count} ({verified_amount:.2f} ETB)\n"
+        text += f"• ⏳ Pending: {pending_count} ({pending_amount:.2f} ETB)\n"
+        text += f"• Verification Rate: {(verified_count/len(transactions)*100):.1f}%\n\n"
+        
+        # Bank breakdown
+        text += f"🏦 **BANK BREAKDOWN:**\n"
+        for bank, amount in sorted(bank_totals.items(), key=lambda x: x[1], reverse=True):
+            count = sum(1 for tx in transactions if tx.get('bank') == bank)
+            text += f"• {bank}: {count} transactions, {amount:.2f} ETB\n"
+        text += "\n"
+        
+        # Waiter breakdown
+        text += f"👥 **WAITER BREAKDOWN:**\n"
+        for waiter, amount in sorted(waiter_totals.items(), key=lambda x: x[1], reverse=True):
+            count = sum(1 for tx in transactions if tx.get('waiter_name') == waiter)
+            verified_count_waiter = sum(1 for tx in transactions if tx.get('waiter_name') == waiter and tx.get('verified'))
+            text += f"• {waiter}: {count} transactions, {amount:.2f} ETB ({verified_count_waiter} verified)\n"
+        text += "\n"
+        
+        # Detailed transaction list
+        text += f"📋 **DETAILED TRANSACTIONS:**\n"
+        text += "=" * 50 + "\n"
+        
+        for i, tx in enumerate(transactions, 1):
             status_icon = "✅" if tx.get('verified') else "⏳"
-            verified_info = f" (Verified by {tx.get('verified_by_name', 'Unknown')})" if tx.get('verified') else ""
-            text += f"{status_icon} **{tx['amount']} ETB** - {tx.get('waiter_name', 'Unknown')}{verified_info}\n"
-            text += f"   Bank: {tx.get('bank', 'Unknown')} | {tx.get('created_at', '')[:10]}\n\n"
+            verified_info = f" | Verified by: {tx.get('verified_by_name', 'Unknown')}" if tx.get('verified') else ""
+            verification_time = f" | Verified at: {tx.get('verified_at', '')[:19]}" if tx.get('verified') else ""
+            
+            text += f"{i:2d}. {status_icon} **{tx['amount']} ETB**\n"
+            text += f"    💳 Bank: {tx.get('bank', 'Unknown')}\n"
+            text += f"    👤 Waiter: {tx.get('waiter_name', 'Unknown')}\n"
+            text += f"    📅 Date: {tx.get('created_at', '')[:19]}\n"
+            text += f"    🆔 ID: {tx.get('id', 'N/A')}\n"
+            if tx.get('payer'):
+                text += f"    💰 Payer: {tx.get('payer', '')}\n"
+            if tx.get('receiver'):
+                text += f"    📥 Receiver: {tx.get('receiver', '')}\n"
+            if tx.get('original_ref'):
+                text += f"    🔗 Reference: {tx.get('original_ref', '')}\n"
+            if tx.get('verification_notes'):
+                text += f"    📝 Notes: {tx.get('verification_notes', '')}\n"
+            text += f"    📊 Status: {'VERIFIED' if tx.get('verified') else 'PENDING'}{verified_info}{verification_time}\n"
+            text += "    " + "-" * 40 + "\n"
         
-        if len(transactions) > 10:
-            text += f"... and {len(transactions) - 10} more transactions\n\n"
+        text += f"\n📊 **REPORT SUMMARY:**\n"
+        text += f"• Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        text += f"• Total transactions processed: {len(transactions)}\n"
+        text += f"• Total amount processed: {total_amount:.2f} ETB\n"
+        text += f"• Verification completion: {(verified_count/len(transactions)*100):.1f}%\n"
     
     # Build keyboard
     keyboard = [
@@ -1968,7 +2022,7 @@ async def show_weekly_day_report(update: Update, day_name: str, is_last_week: bo
     )
 
 async def export_weekly_transactions(update: Update):
-    """Export all current week transactions"""
+    """Export all current week transactions with comprehensive details"""
     user_id = update.effective_user.id
     
     # Get restaurant for this admin
@@ -1984,14 +2038,70 @@ async def export_weekly_transactions(update: Update):
         await update.callback_query.answer("❌ No transactions to export for current week")
         return
     
-    # Create CSV content
-    csv_content = f"Weekly Report for {restaurant['name']} - Current Week\n\n"
-    csv_content += "Transaction ID,Amount,Currency,Bank,Waiter,Status,Verified By,Date,Time,Payer,Receiver,Reference\n"
+    # Calculate summary statistics
+    total_amount = sum(float(tx.get('amount', 0)) for tx in transactions)
+    verified_count = sum(1 for tx in transactions if tx.get('verified'))
+    pending_count = len(transactions) - verified_count
+    verified_amount = sum(float(tx.get('amount', 0)) for tx in transactions if tx.get('verified'))
+    pending_amount = total_amount - verified_amount
+    
+    # Create comprehensive CSV content
+    from datetime import datetime
+    csv_content = f"Weekly Transaction Report - {restaurant['name']}\n"
+    csv_content += f"Report Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+    csv_content += f"Report Period: Current Week (Monday to Sunday)\n\n"
+    
+    # Summary section
+    csv_content += "SUMMARY STATISTICS\n"
+    csv_content += f"Total Transactions,{len(transactions)}\n"
+    csv_content += f"Total Amount (ETB),{total_amount:.2f}\n"
+    csv_content += f"Verified Transactions,{verified_count}\n"
+    csv_content += f"Verified Amount (ETB),{verified_amount:.2f}\n"
+    csv_content += f"Pending Transactions,{pending_count}\n"
+    csv_content += f"Pending Amount (ETB),{pending_amount:.2f}\n"
+    csv_content += f"Verification Rate (%),{(verified_count/len(transactions)*100):.1f}\n\n"
+    
+    # Bank breakdown
+    bank_totals = {}
+    for tx in transactions:
+        bank = tx.get('bank', 'Unknown')
+        amount = float(tx.get('amount', 0))
+        bank_totals[bank] = bank_totals.get(bank, 0) + amount
+    
+    csv_content += "BANK BREAKDOWN\n"
+    csv_content += "Bank,Transaction Count,Total Amount (ETB)\n"
+    for bank, amount in sorted(bank_totals.items(), key=lambda x: x[1], reverse=True):
+        count = sum(1 for tx in transactions if tx.get('bank') == bank)
+        csv_content += f"{bank},{count},{amount:.2f}\n"
+    csv_content += "\n"
+    
+    # Waiter breakdown
+    waiter_totals = {}
+    for tx in transactions:
+        waiter = tx.get('waiter_name', 'Unknown')
+        amount = float(tx.get('amount', 0))
+        waiter_totals[waiter] = waiter_totals.get(waiter, 0) + amount
+    
+    csv_content += "WAITER BREAKDOWN\n"
+    csv_content += "Waiter,Transaction Count,Total Amount (ETB),Verified Count,Verified Amount (ETB)\n"
+    for waiter, amount in sorted(waiter_totals.items(), key=lambda x: x[1], reverse=True):
+        count = sum(1 for tx in transactions if tx.get('waiter_name') == waiter)
+        verified_count_waiter = sum(1 for tx in transactions if tx.get('waiter_name') == waiter and tx.get('verified'))
+        verified_amount_waiter = sum(float(tx.get('amount', 0)) for tx in transactions if tx.get('waiter_name') == waiter and tx.get('verified'))
+        csv_content += f"{waiter},{count},{amount:.2f},{verified_count_waiter},{verified_amount_waiter:.2f}\n"
+    csv_content += "\n"
+    
+    # Detailed transactions
+    csv_content += "DETAILED TRANSACTIONS\n"
+    csv_content += "Transaction ID,Amount (ETB),Currency,Bank,Waiter,Status,Verified By,Verified At,Date,Time,Payer,Receiver,Reference,Verification Notes\n"
     
     for tx in transactions:
-        status = "Verified" if tx.get('verified') else "Pending"
+        status = "VERIFIED" if tx.get('verified') else "PENDING"
         verified_by = tx.get('verified_by_name', '') if tx.get('verified') else ''
-        csv_content += f"{tx['id']},{tx['amount']},{tx.get('currency', 'ETB')},{tx.get('bank', '')},{tx.get('waiter_name', '')},{status},{verified_by},{tx.get('created_at', '')[:10]},{tx.get('created_at', '')[:19]},{tx.get('payer', '')},{tx.get('receiver', '')},{tx.get('original_ref', '')}\n"
+        verified_at = tx.get('verified_at', '')[:19] if tx.get('verified') else ''
+        verification_notes = tx.get('verification_notes', '').replace(',', ';') if tx.get('verification_notes') else ''
+        
+        csv_content += f"{tx['id']},{tx['amount']},{tx.get('currency', 'ETB')},{tx.get('bank', '')},{tx.get('waiter_name', '')},{status},{verified_by},{verified_at},{tx.get('created_at', '')[:10]},{tx.get('created_at', '')[:19]},{tx.get('payer', '')},{tx.get('receiver', '')},{tx.get('original_ref', '')},{verification_notes}\n"
     
     # Send as document
     from io import BytesIO
@@ -2005,6 +2115,121 @@ async def export_weekly_transactions(update: Update):
     )
     
     await update.callback_query.answer("✅ Weekly report exported!")
+
+async def export_weekly_day_transactions(update: Update, day_name: str, week_offset: int):
+    """Export transactions for a specific day with comprehensive details"""
+    user_id = update.effective_user.id
+    
+    # Get restaurant for this admin
+    restaurant = storage.get_restaurant_by_owner(user_id)
+    if not restaurant:
+        await update.callback_query.edit_message_text("❌ Restaurant not found.")
+        return
+    
+    # Get transactions for the specified day
+    transactions = storage.get_transactions_by_weekday(restaurant['id'], day_name, week_offset)
+    
+    if not transactions:
+        await update.callback_query.answer("❌ No transactions to export for this day")
+        return
+    
+    # Calculate date range for display
+    from datetime import datetime, timedelta
+    today = datetime.now()
+    days_since_monday = today.weekday()
+    monday_of_week = today - timedelta(days=days_since_monday)
+    target_week_monday = monday_of_week + timedelta(weeks=week_offset)
+    
+    if day_name == 'lastweek':
+        start_date = target_week_monday
+        end_date = start_date + timedelta(days=6)
+        date_range = f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
+        title = f"Last Week Report - {restaurant['name']}"
+    else:
+        weekday_map = {
+            'monday': 0, 'tuesday': 1, 'wednesday': 2, 'thursday': 3,
+            'friday': 4, 'saturday': 5, 'sunday': 6
+        }
+        day_offset = weekday_map.get(day_name.lower(), 0)
+        target_date = target_week_monday + timedelta(days=day_offset)
+        date_range = target_date.strftime('%Y-%m-%d')
+        title = f"{day_name.title()} Report - {restaurant['name']}"
+    
+    # Calculate summary statistics
+    total_amount = sum(float(tx.get('amount', 0)) for tx in transactions)
+    verified_count = sum(1 for tx in transactions if tx.get('verified'))
+    pending_count = len(transactions) - verified_count
+    verified_amount = sum(float(tx.get('amount', 0)) for tx in transactions if tx.get('verified'))
+    pending_amount = total_amount - verified_amount
+    
+    # Create comprehensive CSV content
+    csv_content = f"{title}\n"
+    csv_content += f"Report Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+    csv_content += f"Report Period: {date_range}\n\n"
+    
+    # Summary section
+    csv_content += "SUMMARY STATISTICS\n"
+    csv_content += f"Total Transactions,{len(transactions)}\n"
+    csv_content += f"Total Amount (ETB),{total_amount:.2f}\n"
+    csv_content += f"Verified Transactions,{verified_count}\n"
+    csv_content += f"Verified Amount (ETB),{verified_amount:.2f}\n"
+    csv_content += f"Pending Transactions,{pending_count}\n"
+    csv_content += f"Pending Amount (ETB),{pending_amount:.2f}\n"
+    csv_content += f"Verification Rate (%),{(verified_count/len(transactions)*100):.1f}\n\n"
+    
+    # Bank breakdown
+    bank_totals = {}
+    for tx in transactions:
+        bank = tx.get('bank', 'Unknown')
+        amount = float(tx.get('amount', 0))
+        bank_totals[bank] = bank_totals.get(bank, 0) + amount
+    
+    csv_content += "BANK BREAKDOWN\n"
+    csv_content += "Bank,Transaction Count,Total Amount (ETB)\n"
+    for bank, amount in sorted(bank_totals.items(), key=lambda x: x[1], reverse=True):
+        count = sum(1 for tx in transactions if tx.get('bank') == bank)
+        csv_content += f"{bank},{count},{amount:.2f}\n"
+    csv_content += "\n"
+    
+    # Waiter breakdown
+    waiter_totals = {}
+    for tx in transactions:
+        waiter = tx.get('waiter_name', 'Unknown')
+        amount = float(tx.get('amount', 0))
+        waiter_totals[waiter] = waiter_totals.get(waiter, 0) + amount
+    
+    csv_content += "WAITER BREAKDOWN\n"
+    csv_content += "Waiter,Transaction Count,Total Amount (ETB),Verified Count,Verified Amount (ETB)\n"
+    for waiter, amount in sorted(waiter_totals.items(), key=lambda x: x[1], reverse=True):
+        count = sum(1 for tx in transactions if tx.get('waiter_name') == waiter)
+        verified_count_waiter = sum(1 for tx in transactions if tx.get('waiter_name') == waiter and tx.get('verified'))
+        verified_amount_waiter = sum(float(tx.get('amount', 0)) for tx in transactions if tx.get('waiter_name') == waiter and tx.get('verified'))
+        csv_content += f"{waiter},{count},{amount:.2f},{verified_count_waiter},{verified_amount_waiter:.2f}\n"
+    csv_content += "\n"
+    
+    # Detailed transactions
+    csv_content += "DETAILED TRANSACTIONS\n"
+    csv_content += "Transaction ID,Amount (ETB),Currency,Bank,Waiter,Status,Verified By,Verified At,Date,Time,Payer,Receiver,Reference,Verification Notes\n"
+    
+    for tx in transactions:
+        status = "VERIFIED" if tx.get('verified') else "PENDING"
+        verified_by = tx.get('verified_by_name', '') if tx.get('verified') else ''
+        verified_at = tx.get('verified_at', '')[:19] if tx.get('verified') else ''
+        verification_notes = tx.get('verification_notes', '').replace(',', ';') if tx.get('verification_notes') else ''
+        
+        csv_content += f"{tx['id']},{tx['amount']},{tx.get('currency', 'ETB')},{tx.get('bank', '')},{tx.get('waiter_name', '')},{status},{verified_by},{verified_at},{tx.get('created_at', '')[:10]},{tx.get('created_at', '')[:19]},{tx.get('payer', '')},{tx.get('receiver', '')},{tx.get('original_ref', '')},{verification_notes}\n"
+    
+    # Send as document
+    from io import BytesIO
+    buf = BytesIO(csv_content.encode('utf-8'))
+    buf.name = f"{day_name}_report_{restaurant['name']}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    
+    await update.callback_query.message.reply_document(
+        document=buf,
+        caption=f"📊 {day_name.title()} Report for {date_range}"
+    )
+    
+    await update.callback_query.answer("✅ Day report exported!")
 
 async def check_and_archive_old_transactions(restaurant_id: int):
     """Auto-archive transactions older than 2 weeks"""
