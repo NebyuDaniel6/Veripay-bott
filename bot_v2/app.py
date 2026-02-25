@@ -1980,11 +1980,16 @@ async def show_weekly_day_report(update: Update, day_name: str, is_last_week: bo
             text += f"• {waiter}: {count} transactions, {amount:.2f} ETB ({verified_count_waiter} verified)\n"
         text += "\n"
         
-        # Detailed transaction list
-        text += f"📋 **DETAILED TRANSACTIONS:**\n"
+        # Detailed transaction list (Telegram has a 4096 char limit – keep this safe)
+        text += f"📋 **DETAILED TRANSACTIONS (first 40):**\n"
         text += "=" * 50 + "\n"
         
+        max_display = 40
         for i, tx in enumerate(transactions, 1):
+            if i > max_display:
+                text += f"\n…and {len(transactions) - max_display} more transactions.\n"
+                break
+            
             status_icon = "✅" if tx.get('verified') else "⏳"
             verified_info = f" | Verified by: {tx.get('verified_by_name', 'Unknown')}" if tx.get('verified') else ""
             verification_time = f" | Verified at: {tx.get('verified_at', '')[:19]}" if tx.get('verified') else ""
